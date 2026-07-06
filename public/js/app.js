@@ -1,55 +1,102 @@
-const socket = window.socket || null;
+const AUTH_TOKEN_KEY = 'officelan_auth_token';
 
 const appUI = {
     users: [],
     activeChat: null,
     messages: {},
-    myId: null
+    myId: null,
+    account: null,
+    devices: []
 };
 
 window.appUI = appUI;
 
 const refs = {
+    app: document.getElementById('app'),
+    modalAuth: document.getElementById('modal-auth'),
+    authError: document.getElementById('auth-error'),
+    authSubtitle: document.getElementById('auth-subtitle'),
+    btnShowLogin: document.getElementById('btn-show-login'),
+    btnShowRegister: document.getElementById('btn-show-register'),
+    formLogin: document.getElementById('form-login'),
+    formRegister: document.getElementById('form-register'),
+    loginUsername: document.getElementById('login-username'),
+    loginPassword: document.getElementById('login-password'),
+    loginRememberMe: document.getElementById('login-remember-me'),
+    registerDisplayName: document.getElementById('register-display-name'),
+    registerUsername: document.getElementById('register-username'),
+    registerPassword: document.getElementById('register-password'),
+    modalSettings: document.getElementById('modal-settings'),
+    closeSettings: document.getElementById('close-settings'),
+    btnSettings: document.getElementById('btn-settings'),
+    inputDisplayName: document.getElementById('input-display-name'),
+    inputAvatar: document.getElementById('input-avatar'),
+    avatarFileName: document.getElementById('avatar-file-name'),
+    btnSaveSettings: document.getElementById('btn-save-settings'),
+    btnLogout: document.getElementById('btn-logout'),
+    myAvatar: document.getElementById('my-avatar'),
+    myName: document.getElementById('my-name'),
+    myPresence: document.getElementById('my-presence'),
+    settingsAvatarPreview: document.getElementById('settings-avatar-preview'),
     contactsList: document.getElementById('contacts-list'),
     lanUsersList: document.getElementById('lan-users-list'),
     onlineCount: document.getElementById('online-count'),
     searchUsers: document.getElementById('search-users'),
+    btnUsersRefresh: document.getElementById('btn-users-refresh'),
     noChatSelected: document.getElementById('no-chat-selected'),
     chatContainer: document.getElementById('chat-container'),
     chatUserName: document.getElementById('chat-user-name'),
     chatAvatar: document.getElementById('chat-avatar'),
     chatStatus: document.getElementById('chat-status'),
     chatMessages: document.getElementById('chat-messages'),
+    btnCloseChat: document.getElementById('btn-close-chat'),
     messageInput: document.getElementById('message-input'),
     btnSend: document.getElementById('btn-send'),
     btnAttach: document.getElementById('btn-attach'),
     fileInput: document.getElementById('file-input'),
-    modalSettings: document.getElementById('modal-settings'),
-    btnSettings: document.getElementById('btn-settings'),
-    closeSettings: document.getElementById('close-settings'),
-    inputDisplayName: document.getElementById('input-display-name'),
-    btnSaveSettings: document.getElementById('btn-save-settings'),
-    myAvatar: document.getElementById('my-avatar'),
-    myName: document.getElementById('my-name'),
     folderSidebar: document.getElementById('modal-folder'),
     btnSharedFolder: document.getElementById('btn-shared-folder'),
     btnFolderRefresh: document.getElementById('btn-folder-refresh'),
+    btnCloseFolder: document.getElementById('btn-close-folder'),
     btnFolderUpload: document.getElementById('btn-folder-upload'),
     folderUploadInput: document.getElementById('folder-upload-input'),
     folderFilesList: document.getElementById('folder-files-list'),
-    folderBreadcrumb: document.getElementById('folder-breadcrumb')
+    folderBreadcrumb: document.getElementById('folder-breadcrumb'),
+    folderEmptyState: document.getElementById('folder-empty-state'),
+    chatContextMenu: document.getElementById('chat-context-menu'),
+    btnDeleteChat: document.getElementById('btn-delete-chat'),
+    serverPresence: document.getElementById('server-presence')
 };
 
 let currentFolderDir = '';
-let activeDisplayName = localStorage.getItem('officelan_display_name') || 'Kullanıcı';
+let audioContext = null;
+let notificationPermissionRequested = false;
+let authMode = 'login';
 
-function getInitials(name) {
-    return name
-        .split(/\s+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0].toUpperCase())
-        .join('');
+function getSocketInstance() {
+    return window.getSocket ? window.getSocket() : null;
+}
+
+function getAuthToken() {
+    return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY) || '';
+}
+
+function setAuthToken(token, rememberMe = true) {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+
+    if (token) {
+        if (rememberMe) {
+            localStorage.setItem(AUTH_TOKEN_KEY, token);
+        } else {
+            sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+        }
+    }
+}
+
+function getDefaultDeviceName() {
+    const platform = navigator.platform || 'Unknown platform';
+    return `${platform} - ${navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Browser'}`;
 }
 
 function escapeHTML(str) {
@@ -58,43 +105,446 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
+function getInitials(name) {
+    return String(name || '?')
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0].toUpperCase())
+        .join('');
+}
+
 function formatTime(value) {
     return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function formatDateLabel(value) {
-    return new Date(value).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
-}
-
 function formatSize(bytes) {
-    if (bytes === null || bytes === undefined) return '—';
+    if (bytes === null || bytes === undefined) return '-';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function hexToRgba(hex, alpha) {
-    const normalized = hex.replace('#', '');
-    const value = normalized.length === 3
-        ? normalized.split('').map((char) => char + char).join('')
-        : normalized;
-    const int = parseInt(value, 16);
-    const r = (int >> 16) & 255;
-    const g = (int >> 8) & 255;
-    const b = int & 255;
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+function formatRelativeTime(value) {
+    if (!value) return 'Unknown';
+
+    const date = new Date(value);
+    const diffMs = Date.now() - date.getTime();
+    const diffMin = Math.max(0, Math.floor(diffMs / 60000));
+
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return `${diffMin} min ago`;
+
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour} hr ago`;
+
+    const diffDay = Math.floor(diffHour / 24);
+    if (diffDay < 7) return `${diffDay} day ago`;
+
+    return date.toLocaleDateString();
 }
 
-function shadeHex(hex, amount) {
-    const normalized = hex.replace('#', '');
-    const value = normalized.length === 3
-        ? normalized.split('').map((char) => char + char).join('')
-        : normalized;
-    const int = parseInt(value, 16);
-    const r = Math.max(0, Math.min(255, ((int >> 16) & 255) + amount));
-    const g = Math.max(0, Math.min(255, ((int >> 8) & 255) + amount));
-    const b = Math.max(0, Math.min(255, (int & 255) + amount));
-    return `rgb(${r}, ${g}, ${b})`;
+function setPresence(element, text, isOnline) {
+    if (!element) return;
+    element.textContent = text;
+    element.className = isOnline ? 'presence-line online' : 'presence-line';
+}
+
+function renderAvatarElement(element, name, avatarUrl) {
+    if (!element) return;
+
+    if (avatarUrl) {
+        element.innerHTML = `<img src="${escapeHTML(avatarUrl)}" alt="${escapeHTML(name)}">`;
+        element.classList.add('has-image');
+    } else {
+        element.textContent = getInitials(name);
+        element.classList.remove('has-image');
+    }
+}
+
+function getAvatarMarkup(name, avatarUrl, sizeClass, style = '') {
+    const extraStyle = style ? ` style="${style}"` : '';
+    if (avatarUrl) {
+        return `<div class="avatar ${sizeClass} avatar-photo has-image"${extraStyle}><img src="${escapeHTML(avatarUrl)}" alt="${escapeHTML(name)}"></div>`;
+    }
+    return `<div class="avatar ${sizeClass} avatar-photo"${extraStyle}>${escapeHTML(getInitials(name))}</div>`;
+}
+
+function ensureAudioContext() {
+    if (!window.AudioContext && !window.webkitAudioContext) return null;
+
+    if (!audioContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioContextClass();
+    }
+
+    if (audioContext.state === 'suspended') {
+        audioContext.resume().catch(() => {});
+    }
+
+    return audioContext;
+}
+
+function playIncomingMessageSound() {
+    const context = ensureAudioContext();
+    if (!context || context.state !== 'running') return;
+
+    const oscillator = context.createOscillator();
+    const gainNode = context.createGain();
+    const now = context.currentTime;
+
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, now);
+    oscillator.frequency.exponentialRampToValueAtTime(660, now + 0.18);
+
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+
+    oscillator.connect(gainNode);
+    gainNode.connect(context.destination);
+    oscillator.start(now);
+    oscillator.stop(now + 0.25);
+}
+
+function requestNotificationPermission() {
+    if (!('Notification' in window) || notificationPermissionRequested) return;
+    if (Notification.permission !== 'default') return;
+
+    notificationPermissionRequested = true;
+    Notification.requestPermission().catch(() => {});
+}
+
+function showDesktopNotification(senderId, message) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    const sender = appUI.users.find((user) => user.id === senderId);
+    const senderName = sender ? sender.displayName || sender.name : 'Yeni mesaj';
+    const body = message.type === 'text'
+        ? String(message.content || 'Yeni mesaj')
+        : 'A new file was shared.';
+
+    const notification = new Notification(senderName, {
+        body,
+        icon: sender && sender.avatarUrl ? sender.avatarUrl : '/logo-white.png',
+        badge: '/logo-white.png',
+        tag: `message-${senderId}`,
+        renotify: true
+    });
+
+    notification.onclick = () => {
+        window.focus();
+        selectUser(senderId);
+        notification.close();
+    };
+}
+
+async function apiFetch(url, options = {}) {
+    const token = getAuthToken();
+    const headers = new Headers(options.headers || {});
+
+    if (token && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+    }
+
+    const response = await fetch(url, { ...options, headers });
+    let payload = null;
+
+    try {
+        payload = await response.json();
+    } catch (error) {
+        payload = null;
+    }
+
+    if (!response.ok) {
+        throw new Error((payload && payload.error) || 'Istek basarisiz.');
+    }
+
+    return payload;
+}
+
+function showAuthMode(mode) {
+    authMode = mode;
+    refs.formLogin.classList.toggle('hidden', mode !== 'login');
+    refs.formRegister.classList.toggle('hidden', mode !== 'register');
+    refs.btnShowLogin.classList.toggle('active', mode === 'login');
+    refs.btnShowRegister.classList.toggle('active', mode === 'register');
+    refs.authError.classList.add('hidden');
+
+    if (mode === 'login') {
+        refs.authSubtitle.innerHTML = 'Sign in to continue to <span>OF-LAN</span>';
+    } else {
+        refs.authSubtitle.innerHTML = 'Join the shared workspace on <span>OF-LAN</span>';
+    }
+}
+
+function handleAuthSwitch(targetMode) {
+    if (authMode === targetMode) {
+        if (targetMode === 'login') {
+            refs.formLogin.requestSubmit();
+        } else {
+            refs.formRegister.requestSubmit();
+        }
+        return;
+    }
+
+    showAuthMode(targetMode);
+}
+
+function togglePasswordVisibility(inputId, trigger) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    if (trigger) {
+        trigger.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    }
+}
+
+function showAuthError(message) {
+    refs.authError.textContent = message;
+    refs.authError.classList.remove('hidden');
+}
+
+function clearAuthState() {
+    setAuthToken('');
+    appUI.account = null;
+    appUI.devices = [];
+    appUI.users = [];
+    appUI.myId = null;
+    appUI.activeChat = null;
+    if (window.disconnectSocket) {
+        window.disconnectSocket();
+    }
+    refs.modalAuth.classList.remove('hidden');
+    refs.modalSettings.classList.add('hidden');
+    refs.app.classList.add('hidden');
+}
+
+function getMessageSeed(userId) {
+    if (!appUI.messages[userId]) appUI.messages[userId] = [];
+    return appUI.messages[userId];
+}
+
+function renderProfile() {
+    const account = appUI.account;
+    if (!account) return;
+
+    refs.myName.textContent = account.displayName;
+    refs.inputDisplayName.value = account.displayName;
+    renderAvatarElement(refs.myAvatar, account.displayName, account.avatarUrl);
+    renderAvatarElement(refs.settingsAvatarPreview, account.displayName, account.avatarUrl);
+    setPresence(refs.myPresence, account.online ? 'Online' : `Last seen ${formatRelativeTime(account.lastSeen)}`, !!account.online);
+}
+
+function getUserMeta(user) {
+    if (user.online) return 'Online now';
+    if (user.lastSeen) return `Last seen ${formatRelativeTime(user.lastSeen)}`;
+    return 'Offline';
+}
+
+function makeUserList(users) {
+    return users.map((user) => {
+        const active = appUI.activeChat === user.id ? 'active' : '';
+        const dotClass = user.online ? 'online' : 'offline';
+        return `
+            <li class="person-row ${active}" data-user-id="${escapeHTML(user.id)}">
+                ${getAvatarMarkup(user.displayName || user.name, user.avatarUrl, 'avatar-sm')}
+                <div class="person-copy">
+                    <div class="person-name">${escapeHTML(user.displayName || user.name)}</div>
+                    <div class="person-meta">${escapeHTML(getUserMeta(user))}</div>
+                </div>
+                <span class="status-dot ${dotClass}"></span>
+            </li>
+        `;
+    }).join('');
+}
+
+function renderUsers() {
+    const term = refs.searchUsers.value.trim().toLowerCase();
+    const filtered = appUI.users.filter((user) => (user.displayName || user.name || '').toLowerCase().includes(term));
+    const onlineUsers = filtered.filter((user) => user.online);
+    const offlineUsers = filtered.filter((user) => !user.online);
+
+    refs.contactsList.innerHTML = makeUserList(onlineUsers);
+    refs.lanUsersList.innerHTML = makeUserList(offlineUsers);
+    refs.onlineCount.textContent = String(appUI.users.filter((user) => user.online).length);
+
+    document.querySelectorAll('.person-row').forEach((row) => {
+        row.addEventListener('click', () => {
+            const userId = row.getAttribute('data-user-id');
+            selectUser(userId);
+        });
+    });
+}
+
+function getInlineFileIcon(kind) {
+    const lower = String(kind || '').toLowerCase();
+    if (lower === 'pdf') {
+        return `
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+        `;
+    }
+
+    return `
+        <svg viewBox="0 0 24 24" fill="none">
+            <path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+        </svg>
+    `;
+}
+
+function renderMessage(message, peerUser) {
+    const time = formatTime(message.time || Date.now());
+    const side = message.sentByMe ? 'sent' : 'received';
+    const tickIcon = message.read
+        ? `<span class="meta-check read">
+            <svg viewBox="0 0 18 11" fill="none">
+                <path d="M1 5.5L5 9.5L13 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M5 9.5L13 1.5M9 9.5L17 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>`
+        : `<span class="meta-check">
+            <svg viewBox="0 0 12 11" fill="none">
+                <path d="M1 5.5L5 9.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>`;
+    const meta = message.sentByMe ? `${time} ${tickIcon}` : time;
+
+    if (message.type === 'file') {
+        return `
+            <div class="message-row ${side}">
+                <div class="file-card ${message.sentByMe ? 'sent' : ''}">
+                    <div class="file-card-top">
+                        <div class="file-icon">${getInlineFileIcon(message.icon || 'file')}</div>
+                        <div class="file-copy">
+                            <div class="file-name">${escapeHTML(message.name)}</div>
+                            <div class="file-size">${escapeHTML(message.size || '')}</div>
+                        </div>
+                    </div>
+                    <div class="message-meta" style="margin-top: 10px;">${meta}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    const avatarName = message.sentByMe
+        ? (appUI.account ? appUI.account.displayName : 'Me')
+        : (peerUser ? peerUser.displayName || peerUser.name : 'User');
+
+    const avatarUrl = message.sentByMe
+        ? (appUI.account ? appUI.account.avatarUrl : '')
+        : (peerUser ? peerUser.avatarUrl : '');
+
+    return `
+        <div class="message-row ${side}">
+            ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', message.sentByMe ? 'background: linear-gradient(180deg, #8650f3, #5e2fc4);' : 'background: linear-gradient(180deg, #8b5cf6, #6d45db);')}
+            <div class="message-stack">
+                <div class="message-bubble">${escapeHTML(message.content)}</div>
+                <div class="message-meta">${meta}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderChat(userId) {
+    if (!userId) {
+        refs.noChatSelected.classList.remove('hidden');
+        refs.chatContainer.classList.add('hidden');
+        refs.chatMessages.innerHTML = '';
+        return;
+    }
+
+    const user = appUI.users.find((item) => item.id === userId);
+    if (!user) {
+        refs.noChatSelected.classList.remove('hidden');
+        refs.chatContainer.classList.add('hidden');
+        return;
+    }
+
+    refs.noChatSelected.classList.add('hidden');
+    refs.chatContainer.classList.remove('hidden');
+    refs.chatUserName.textContent = user.displayName || user.name;
+    renderAvatarElement(refs.chatAvatar, user.displayName || user.name, user.avatarUrl);
+    setPresence(refs.chatStatus, user.online ? 'Online' : `Last seen ${formatRelativeTime(user.lastSeen)}`, !!user.online);
+
+    const messages = getMessageSeed(userId);
+    const html = ['<div class="day-pill">Today</div>'];
+
+    messages.forEach((message) => html.push(renderMessage(message, user)));
+
+    refs.chatMessages.innerHTML = html.join('');
+    refs.chatMessages.scrollTop = refs.chatMessages.scrollHeight;
+}
+
+function selectUser(userId) {
+    appUI.activeChat = userId;
+    renderUsers();
+    renderChat(userId);
+}
+
+function closeActiveChat() {
+    if (appUI.activeChat) {
+        appUI.activeChat = null;
+        renderUsers();
+        renderChat(null);
+    }
+}
+
+async function sendChatMessage() {
+    const text = refs.messageInput.value.trim();
+    if (!text || !appUI.activeChat) return;
+
+    const message = { type: 'text', content: text, time: Date.now(), sentByMe: true };
+    const sent = await window.sendMessageToPeer(appUI.activeChat, message);
+
+    if (!sent) {
+        alert('Message could not be sent. The other user may be offline.');
+        return;
+    }
+
+    getMessageSeed(appUI.activeChat).push(message);
+    refs.messageInput.value = '';
+    renderChat(appUI.activeChat);
+}
+
+appUI.handleIncomingMessage = (senderId, msgObj) => {
+    getMessageSeed(senderId).push({ ...msgObj, sentByMe: false });
+    playIncomingMessageSound();
+
+    const shouldNotify = appUI.activeChat !== senderId || document.hidden || !document.hasFocus();
+    if (shouldNotify) {
+        showDesktopNotification(senderId, msgObj);
+    }
+
+    if (appUI.activeChat === senderId) {
+        renderChat(senderId);
+    }
+};
+
+function syncUserSource(rawUsers) {
+    appUI.users = (rawUsers || []).filter((user) => user.id !== appUI.myId);
+
+    if (appUI.activeChat && !appUI.users.some((user) => user.id === appUI.activeChat)) {
+        appUI.activeChat = null;
+    }
+
+    renderUsers();
+    renderChat(appUI.activeChat);
+}
+
+function handleSessionState(payload) {
+    if (!payload || !payload.account) return;
+    appUI.account = payload.account;
+    appUI.myId = payload.account.id;
+    appUI.devices = payload.devices || [];
+    renderProfile();
+    renderUsers();
+    renderChat(appUI.activeChat);
 }
 
 function getFileBadge(name, isDir) {
@@ -109,271 +559,14 @@ function getFileBadge(name, isDir) {
         `;
     }
 
-    const lower = name.toLowerCase();
-    let color = '#7f8eea';
-    let icon = `
-        <svg viewBox="0 0 24 24" fill="none">
-            <path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-        </svg>
-    `;
-
-    if (lower.endsWith('.pdf')) {
-        color = '#ff6b6b';
-    } else if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) {
-        color = '#58c58b';
-    } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png')) {
-        color = '#72a7ff';
-    } else if (lower.endsWith('.zip') || lower.endsWith('.rar')) {
-        color = '#f1b55a';
-    } else if (lower.endsWith('.mp4') || lower.endsWith('.mov')) {
-        color = '#7fb3ff';
-    } else if (lower.endsWith('.md') || lower.endsWith('.txt')) {
-        color = '#91a2ff';
-    }
-
-    return `<div class="file-badge" style="background:${hexToRgba(color, 0.18)}; color:${color};">${icon}</div>`;
-}
-
-function renderProfile() {
-    refs.myName.textContent = activeDisplayName;
-    refs.myAvatar.textContent = getInitials(activeDisplayName);
-    refs.inputDisplayName.value = activeDisplayName;
-}
-
-function makeUserList(users) {
-    return users
-        .map((user) => {
-            const active = appUI.activeChat === user.id ? 'active' : '';
-            const dotClass = user.status === 'idle' ? 'idle' : user.status === 'offline' ? 'offline' : 'online';
-            const initials = user.initials || getInitials(user.name);
-            const accent = user.accent || '#7f5af0';
-            return `
-                <li class="person-row ${active}" data-user-id="${escapeHTML(user.id)}">
-                    <div class="avatar avatar-sm" style="background: linear-gradient(180deg, ${accent}, ${shadeHex(accent, -34)});">${escapeHTML(initials)}</div>
-                    <div class="person-copy">
-                        <div class="person-name">${escapeHTML(user.name)}</div>
-                        <div class="person-meta">${escapeHTML(user.ip || 'Online')}</div>
-                    </div>
-                    <span class="status-dot ${dotClass}"></span>
-                </li>
-            `;
-        })
-        .join('');
-}
-
-function renderUsers() {
-    const term = refs.searchUsers.value.trim().toLowerCase();
-    const filtered = appUI.users.filter((user) => user.name.toLowerCase().includes(term));
-    const contacts = filtered.filter((user) => user.isCustomName);
-    const others = filtered.filter((user) => !user.isCustomName);
-
-    refs.contactsList.innerHTML = makeUserList(contacts);
-    refs.lanUsersList.innerHTML = makeUserList(others);
-    refs.onlineCount.textContent = String(filtered.length);
-
-    document.querySelectorAll('.person-row').forEach((row) => {
-        row.addEventListener('click', () => {
-            const userId = row.getAttribute('data-user-id');
-            selectUser(userId);
-        });
-    });
-}
-
-function getMessageSeed(userId) {
-    if (!appUI.messages[userId]) appUI.messages[userId] = [];
-    return appUI.messages[userId];
-}
-
-function renderMessage(message) {
-    const time = formatTime(message.time || Date.now());
-    const side = message.sentByMe ? 'sent' : 'received';
-    const meta = message.sentByMe ? `${time} <span class="meta-check">✓✓</span>` : time;
-
-    if (message.type === 'file') {
-        return `
-            <div class="message-row ${side}">
-                <div class="file-card ${message.sentByMe ? 'sent' : ''}">
-                    <div class="file-card-top">
-                        <div class="file-icon" style="color: ${message.icon === 'pptx' ? '#ff9f43' : '#7fb3ff'};">
-                            ${getInlineFileIcon(message.icon || 'file')}
-                        </div>
-                        <div class="file-copy">
-                            <div class="file-name">${escapeHTML(message.name)}</div>
-                            <div class="file-size">${escapeHTML(message.size || '')}</div>
-                        </div>
-                        <button class="file-download" aria-label="İndir">
-                            <svg viewBox="0 0 24 24" fill="none"><path d="M12 4v10m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </button>
-                    </div>
-                    <div class="message-meta" style="margin-top: 10px;">${meta}</div>
-                </div>
-            </div>
-        `;
-    }
-
-    if (message.type === 'upload') {
-        return `
-            <div class="message-row ${side}">
-                <div class="file-card sent">
-                    <div class="file-card-top">
-                        <div class="file-icon" style="color: #ff9f43;">
-                            ${getInlineFileIcon(message.icon || 'pptx')}
-                        </div>
-                        <div class="file-copy">
-                            <div class="file-name">${escapeHTML(message.name)}</div>
-                            <div class="file-size">${escapeHTML(message.size || '')}</div>
-                        </div>
-                        <button class="file-download" aria-label="Ayrıntı">
-                            <svg viewBox="0 0 24 24" fill="none"><path d="M9 6.5 15 12l-6 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </button>
-                    </div>
-                    <div class="file-progress"><span style="--progress:${message.progress || 0}%"></span></div>
-                    <div class="file-progress-meta">
-                        <span>${escapeHTML(message.current || '')}</span>
-                        <button class="cancel-button">Cancel</button>
-                    </div>
-                    <div class="message-meta">${meta}</div>
-                </div>
-            </div>
-        `;
-    }
-
     return `
-        <div class="message-row ${side}">
-            <div class="avatar avatar-sm" style="background:${message.sentByMe ? 'linear-gradient(180deg, #8650f3, #5e2fc4)' : 'linear-gradient(180deg, #8b5cf6, #6d45db)'}">${escapeHTML(message.sentByMe ? getInitials(activeDisplayName) : getInitials((appUI.users.find((u) => u.id === appUI.activeChat) || {}).name || 'AS'))}</div>
-            <div class="message-stack">
-                <div class="message-bubble">${escapeHTML(message.content)}</div>
-                <div class="message-meta">${meta}</div>
-            </div>
+        <div class="file-badge" style="background: rgba(127, 142, 234, 0.18); color: #7f8eea;">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
         </div>
     `;
-}
-
-function getInlineFileIcon(kind) {
-    const lower = String(kind || '').toLowerCase();
-    if (lower === 'pdf') {
-        return `
-            <svg viewBox="0 0 24 24" fill="none">
-                <path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                <path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            </svg>
-        `;
-    }
-
-    if (lower === 'pptx') {
-        return `
-            <svg viewBox="0 0 24 24" fill="none">
-                <path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                <path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                <path d="M9.2 13.5h5.6M9.2 16h3.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
-            </svg>
-        `;
-    }
-
-    return `
-        <svg viewBox="0 0 24 24" fill="none">
-            <path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-        </svg>
-    `;
-}
-
-function renderChat(userId) {
-    if (!userId) {
-        refs.noChatSelected.classList.remove('hidden');
-        refs.chatContainer.classList.add('hidden');
-        refs.chatMessages.innerHTML = '';
-        return;
-    }
-
-    const user = appUI.users.find((item) => item.id === userId);
-    const name = user ? user.name : 'Bilinmeyen';
-    const statusText = user && user.status === 'idle' ? 'Idle' : 'Online';
-
-    refs.noChatSelected.classList.add('hidden');
-    refs.chatContainer.classList.remove('hidden');
-    refs.chatUserName.textContent = name;
-    refs.chatAvatar.textContent = getInitials(name || '?');
-    refs.chatStatus.textContent = statusText;
-    refs.chatStatus.className = user && user.status === 'idle' ? 'presence-line' : 'presence-line online';
-
-    const messages = getMessageSeed(userId);
-    const html = [`<div class="day-pill">Today</div>`];
-
-    if (!messages.length) {
-        html.push(`
-            <div class="day-pill" style="align-self:flex-start; background: rgba(255,255,255,0.03);">Henüz mesaj yok</div>
-        `);
-    } else {
-        messages.forEach((message) => {
-            html.push(renderMessage(message));
-        });
-    }
-
-    refs.chatMessages.innerHTML = html.join('');
-    refs.chatMessages.scrollTop = refs.chatMessages.scrollHeight;
-}
-
-function selectUser(userId) {
-    appUI.activeChat = userId;
-    renderUsers();
-    renderChat(userId);
-}
-
-async function sendChatMessage() {
-    const text = refs.messageInput.value.trim();
-    if (!text || !appUI.activeChat) return;
-
-    const message = { type: 'text', content: text, time: Date.now(), sentByMe: true };
-    const sent = await window.sendMessageToPeer(appUI.activeChat, message);
-    if (sent) {
-        if (!appUI.messages[appUI.activeChat]) appUI.messages[appUI.activeChat] = [];
-        appUI.messages[appUI.activeChat].push(message);
-        refs.messageInput.value = '';
-        renderChat(appUI.activeChat);
-    } else {
-        alert('Mesaj gönderilemedi. Karşı taraf çevrimdışı veya bağlantı yok.');
-    }
-}
-
-appUI.handleIncomingMessage = (senderId, msgObj) => {
-    if (!appUI.messages[senderId]) appUI.messages[senderId] = [];
-    appUI.messages[senderId].push({ ...msgObj, sentByMe: false });
-    if (appUI.activeChat === senderId) {
-        renderChat(senderId);
-    }
-};
-
-appUI.updateP2PStatus = (state) => {
-    if (!refs.chatStatus) return;
-
-    if (state === 'connected') {
-        refs.chatStatus.textContent = 'Connected';
-        refs.chatStatus.className = 'presence-line online';
-    } else if (state === 'connecting' || state === 'new') {
-        refs.chatStatus.textContent = 'Bağlanıyor...';
-        refs.chatStatus.className = 'presence-line';
-    } else if (state) {
-        refs.chatStatus.textContent = String(state);
-        refs.chatStatus.className = 'presence-line';
-    }
-};
-
-function syncUserSource(rawUsers) {
-    const remoteUsers = rawUsers.filter((user) => user.id !== appUI.myId && user.online);
-    appUI.users = remoteUsers;
-
-    if (appUI.activeChat && !appUI.users.some((user) => user.id === appUI.activeChat)) {
-        appUI.activeChat = null;
-    }
-
-    if (!appUI.activeChat && appUI.users.length) {
-        appUI.activeChat = appUI.users[0].id;
-    }
-
-    renderUsers();
-    renderChat(appUI.activeChat);
 }
 
 function renderFiles(files) {
@@ -387,8 +580,8 @@ function renderFiles(files) {
                         <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l2 2H18a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-10Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
                     </svg>
                 </div>
-                <h3 style="font-size:18px; margin-top:14px;">Klasör boş</h3>
-                <p style="max-width:280px;">Bu klasörde şu anda dosya yok.</p>
+                <h3 style="font-size:18px; margin-top:14px;">Klasor bos</h3>
+                <p style="max-width:280px;">Bu klasorde su anda dosya yok.</p>
             </div>
         `;
         return;
@@ -396,24 +589,23 @@ function renderFiles(files) {
 
     refs.folderFilesList.innerHTML = rows.map((file) => {
         const isDir = !!file.isDir;
-        const size = isDir ? '—' : formatSize(file.size);
-        const modified = file.mtime ? new Date(file.mtime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Today';
-        const name = escapeHTML(file.name);
+        const size = isDir ? '-' : formatSize(file.size);
+        const modified = file.mtime
+            ? new Date(file.mtime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : 'Today';
         const action = isDir
-            ? `<button class="file-download" title="Open" onclick="navigateFolder('${currentFolderDir ? `${currentFolderDir}/` : ''}${file.name}')">›</button>`
-            : `<button class="file-download" title="Download" onclick="window.open('/uploads/${currentFolderDir ? `${currentFolderDir}/` : ''}${encodeURIComponent(file.name)}')">↓</button>`;
+            ? `<button class="file-download" title="Open" onclick="navigateFolder('${currentFolderDir ? `${currentFolderDir}/` : ''}${file.name}')">></button>`
+            : `<button class="file-download" title="Download" onclick="window.open('/uploads/${currentFolderDir ? `${currentFolderDir}/` : ''}${encodeURIComponent(file.name)}')">v</button>`;
+
         return `
             <div class="file-row">
                 <div class="file-name-cell">
                     ${getFileBadge(file.name, isDir)}
-                    <div class="file-row-name">${name}</div>
+                    <div class="file-row-name">${escapeHTML(file.name)}</div>
                 </div>
-                <div class="file-row-size">${size}</div>
-                <div class="file-row-mod">${modified}</div>
-                <div class="file-row-actions">
-                    ${action}
-                    <button class="file-download" title="More">⋮</button>
-                </div>
+                <div class="file-row-size">${escapeHTML(size)}</div>
+                <div class="file-row-mod">${escapeHTML(modified)}</div>
+                <div class="file-row-actions">${action}</div>
             </div>
         `;
     }).join('');
@@ -421,22 +613,26 @@ function renderFiles(files) {
 
 function renderBreadcrumb() {
     const parts = currentFolderDir.split('/').filter(Boolean);
-    let html = `<span style="color:#aab3d4;">Shared</span> <span style="color:#667093;">/</span> <span style="color:#f2f5ff;">Files</span>`;
-    if (parts.length) {
-        let pathAccumulator = '';
-        html = `
-            <span class="breadcrumb-link" onclick="navigateFolder('')">Shared</span>
-            <span class="breadcrumb-sep">/</span>
-            <span class="breadcrumb-link" onclick="navigateFolder('')">Files</span>
-        `;
-        parts.forEach((part) => {
-            pathAccumulator += (pathAccumulator ? '/' : '') + part;
-            html += `
-                <span class="breadcrumb-sep">/</span>
-                <span class="breadcrumb-link" onclick="navigateFolder('${pathAccumulator}')">${escapeHTML(part)}</span>
-            `;
-        });
+    if (!parts.length) {
+        refs.folderBreadcrumb.innerHTML = '<span style="color:#aab3d4;">Shared</span> <span style="color:#667093;">/</span> <span style="color:#f2f5ff;">Files</span>';
+        return;
     }
+
+    let pathAccumulator = '';
+    let html = `
+        <span class="breadcrumb-link" onclick="navigateFolder('')">Shared</span>
+        <span class="breadcrumb-sep">/</span>
+        <span class="breadcrumb-link" onclick="navigateFolder('')">Files</span>
+    `;
+
+    parts.forEach((part) => {
+        pathAccumulator += (pathAccumulator ? '/' : '') + part;
+        html += `
+            <span class="breadcrumb-sep">/</span>
+            <span class="breadcrumb-link" onclick="navigateFolder('${pathAccumulator}')">${escapeHTML(part)}</span>
+        `;
+    });
+
     refs.folderBreadcrumb.innerHTML = html;
 }
 
@@ -457,15 +653,229 @@ window.navigateFolder = (dir) => {
     fetchFiles();
 };
 
-window.deleteFile = async (name) => {
-    if (!confirm(`"${name}" silinecek. Emin misiniz?`)) return;
-    const query = currentFolderDir ? `?dir=${encodeURIComponent(currentFolderDir)}` : '';
-    await fetch(`/api/folder/${encodeURIComponent(name)}${query}`, { method: 'DELETE' });
+async function openAuthenticatedApp(account) {
+    appUI.account = account;
+    appUI.myId = account.id;
+    refs.modalAuth.classList.add('hidden');
+    refs.app.classList.remove('hidden');
+    renderProfile();
     fetchFiles();
-};
+
+    const socket = window.connectSocket ? window.connectSocket(getAuthToken()) : null;
+    if (!socket) return;
+
+    socket.on('connect', () => {
+        setPresence(refs.serverPresence, 'Connected', true);
+        socket.emit('request_session_state');
+    });
+
+    socket.on('disconnect', () => {
+        setPresence(refs.serverPresence, 'Disconnected', false);
+    });
+
+    socket.on('connect_error', (err) => {
+        const msg = err && (err.message || String(err));
+        const isAuthError = msg === 'Authentication required' || msg === 'Invalid session';
+        if (isAuthError) {
+            setPresence(refs.serverPresence, 'Session expired', false);
+            clearAuthState();
+        } else {
+            setPresence(refs.serverPresence, 'Connecting...', false);
+        }
+    });
+
+    socket.on('update_users', syncUserSource);
+    socket.on('session_state', handleSessionState);
+    socket.on('direct_message', (payload) => {
+        if (!payload || !payload.sender || !payload.message) return;
+        appUI.handleIncomingMessage(payload.sender, payload.message);
+    });
+}
+
+async function hydrateSession() {
+    const token = getAuthToken();
+    if (!token) {
+        refs.modalAuth.classList.remove('hidden');
+        refs.app.classList.add('hidden');
+        return;
+    }
+
+    try {
+        const payload = await apiFetch('/api/auth/me');
+        appUI.account = payload.account;
+        appUI.devices = payload.devices || [];
+        await openAuthenticatedApp(payload.account);
+    } catch (error) {
+        clearAuthState();
+    }
+}
+
+async function handleLoginSubmit(event) {
+    event.preventDefault();
+    try {
+        const payload = await apiFetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: refs.loginUsername.value.trim(),
+                password: refs.loginPassword.value,
+                deviceName: getDefaultDeviceName()
+            })
+        });
+
+        setAuthToken(payload.token, refs.loginRememberMe.checked);
+        refs.loginPassword.value = '';
+        await hydrateSession();
+    } catch (error) {
+        showAuthError(error.message);
+    }
+}
+
+async function handleRegisterSubmit(event) {
+    event.preventDefault();
+    try {
+        const payload = await apiFetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                displayName: refs.registerDisplayName.value.trim(),
+                username: refs.registerUsername.value.trim(),
+                password: refs.registerPassword.value,
+                deviceName: getDefaultDeviceName()
+            })
+        });
+
+        setAuthToken(payload.token, true);
+        refs.registerPassword.value = '';
+        await hydrateSession();
+    } catch (error) {
+        showAuthError(error.message);
+    }
+}
+
+async function saveSettings() {
+    const formData = new FormData();
+    formData.append('displayName', refs.inputDisplayName.value.trim());
+    if (refs.inputAvatar.files[0]) {
+        formData.append('avatar', refs.inputAvatar.files[0]);
+    }
+
+    const payload = await apiFetch('/api/auth/profile', {
+        method: 'PATCH',
+        body: formData
+    });
+
+    appUI.account = { ...appUI.account, ...payload.account, online: true };
+    renderProfile();
+    refs.modalSettings.classList.add('hidden');
+    refs.inputAvatar.value = '';
+
+    const socket = getSocketInstance();
+    if (socket) {
+        socket.emit('profile_updated');
+        socket.emit('request_session_state');
+    }
+}
+
+async function logout() {
+    try {
+        await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch (error) {
+        // ignore logout errors while clearing local state
+    }
+
+    clearAuthState();
+}
 
 function setupEvents() {
+    const enableLocalAlerts = () => {
+        ensureAudioContext();
+        requestNotificationPermission();
+    };
+
+    document.addEventListener('click', enableLocalAlerts, { once: true });
+    document.addEventListener('keydown', enableLocalAlerts, { once: true });
+
+    refs.btnShowLogin.addEventListener('click', () => handleAuthSwitch('login'));
+    refs.btnShowRegister.addEventListener('click', () => handleAuthSwitch('register'));
+    document.querySelectorAll('.password-toggle').forEach((button) => {
+        button.addEventListener('click', () => {
+            togglePasswordVisibility(button.getAttribute('data-target'), button);
+        });
+    });
+
+    const showContextMenu = (e) => {
+        const row = e.target.closest('.person-row');
+        if (row) {
+            e.preventDefault();
+            const userId = row.dataset.userId;
+            refs.chatContextMenu.dataset.userId = userId;
+            refs.chatContextMenu.classList.remove('hidden');
+            refs.chatContextMenu.style.left = `${e.clientX}px`;
+            refs.chatContextMenu.style.top = `${e.clientY}px`;
+        }
+    };
+
+    refs.lanUsersList.addEventListener('contextmenu', showContextMenu);
+    refs.contactsList.addEventListener('contextmenu', showContextMenu);
+
+    document.addEventListener('click', (e) => {
+        if (!refs.chatContextMenu.classList.contains('hidden') && !refs.chatContextMenu.contains(e.target)) {
+            refs.chatContextMenu.classList.add('hidden');
+        }
+    });
+
+    refs.btnDeleteChat.addEventListener('click', () => {
+        const userId = refs.chatContextMenu.dataset.userId;
+        if (userId) {
+            appUI.messages[userId] = [];
+            if (appUI.activeChat === userId) {
+                renderChat(userId);
+            }
+            refs.chatContextMenu.classList.add('hidden');
+        }
+    });
+
+    refs.formLogin.addEventListener('submit', handleLoginSubmit);
+    refs.formRegister.addEventListener('submit', handleRegisterSubmit);
+
+    refs.btnSettings.addEventListener('click', () => refs.modalSettings.classList.remove('hidden'));
+    refs.closeSettings.addEventListener('click', () => refs.modalSettings.classList.add('hidden'));
+    refs.inputAvatar.addEventListener('change', () => {
+        const file = refs.inputAvatar.files && refs.inputAvatar.files[0];
+        refs.avatarFileName.textContent = file ? file.name : 'No file selected';
+    });
+    refs.btnSaveSettings.addEventListener('click', async () => {
+        try {
+            await saveSettings();
+        } catch (error) {
+            alert(error.message);
+        }
+    });
+    refs.btnLogout.addEventListener('click', logout);
+
     refs.searchUsers.addEventListener('input', renderUsers);
+    refs.btnUsersRefresh.addEventListener('click', () => {
+        const socket = getSocketInstance();
+        if (socket) socket.emit('request_session_state');
+        renderUsers();
+    });
+
+    if (refs.btnCloseChat) {
+        refs.btnCloseChat.addEventListener('click', closeActiveChat);
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (!refs.folderSidebar.classList.contains('hidden')) {
+                refs.folderSidebar.classList.add('hidden');
+            } else if (!refs.modalSettings.classList.contains('hidden')) {
+                refs.modalSettings.classList.add('hidden');
+            } else {
+                closeActiveChat();
+            }
+        }
+    });
 
     refs.messageInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' && !event.shiftKey) {
@@ -482,28 +892,20 @@ function setupEvents() {
     refs.btnSend.addEventListener('click', sendChatMessage);
     refs.btnAttach.addEventListener('click', () => refs.fileInput.click());
     refs.fileInput.addEventListener('change', () => {
-        alert('WebRTC doğrudan dosya gönderimi yerine ortak klasör kullanın.');
+        alert('Dogrudan dosya gonderimi yerine ortak klasor kullanin.');
         refs.fileInput.value = '';
-    });
-
-    refs.btnSettings.addEventListener('click', () => refs.modalSettings.classList.remove('hidden'));
-    refs.closeSettings.addEventListener('click', () => refs.modalSettings.classList.add('hidden'));
-    refs.btnSaveSettings.addEventListener('click', () => {
-        const name = refs.inputDisplayName.value.trim();
-        if (!name) return;
-        activeDisplayName = name;
-        localStorage.setItem('officelan_display_name', name);
-        renderProfile();
-        refs.modalSettings.classList.add('hidden');
-        if (socket) {
-            socket.emit('set_name', name);
-        }
     });
 
     refs.btnSharedFolder.addEventListener('click', () => {
         fetchFiles();
-        refs.folderSidebar.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        refs.folderSidebar.classList.remove('hidden');
     });
+
+    if (refs.btnCloseFolder) {
+        refs.btnCloseFolder.addEventListener('click', () => {
+            refs.folderSidebar.classList.add('hidden');
+        });
+    }
 
     refs.btnFolderRefresh.addEventListener('click', fetchFiles);
     refs.btnFolderUpload.addEventListener('click', () => refs.folderUploadInput.click());
@@ -516,13 +918,8 @@ function setupEvents() {
 
         try {
             const query = currentFolderDir ? `?dir=${encodeURIComponent(currentFolderDir)}` : '';
-            await fetch(`/api/folder/upload${query}`, {
-                method: 'POST',
-                body: formData
-            });
+            await fetch(`/api/folder/upload${query}`, { method: 'POST', body: formData });
             fetchFiles();
-        } catch (error) {
-            console.error('Upload fail', error);
         } finally {
             refs.folderUploadInput.value = '';
         }
@@ -536,30 +933,10 @@ function setupEvents() {
     });
 }
 
-function bootSocket() {
-    if (typeof socket === 'undefined' || !socket) {
-        return;
-    }
-
-    socket.on('connect', () => {
-        appUI.myId = socket.id;
-        renderProfile();
-        socket.emit('set_name', activeDisplayName);
-    });
-
-    socket.on('update_users', syncUserSource);
-
-    socket.on('direct_message', (payload) => {
-        if (!payload || !payload.sender || !payload.message) return;
-        appUI.handleIncomingMessage(payload.sender, payload.message);
-    });
-}
-
 function init() {
-    renderProfile();
     setupEvents();
-    bootSocket();
-    fetchFiles();
+    showAuthMode('login');
+    hydrateSession();
 }
 
 init();
