@@ -39,7 +39,7 @@ window.connectToPeer = function connectToPeer() {
 window.sendMessageToPeer = function sendMessageToPeer(targetAccountId, messageObj) {
     return new Promise((resolve) => {
         if (!socket || !socket.connected) {
-            resolve(false);
+            resolve({ ok: false, queued: false });
             return;
         }
 
@@ -47,7 +47,17 @@ window.sendMessageToPeer = function sendMessageToPeer(targetAccountId, messageOb
             target: targetAccountId,
             message: messageObj
         }, (ack) => {
-            resolve(Boolean(ack && ack.ok));
+            if (!ack || !ack.ok) {
+                resolve({ ok: false, error: ack && ack.error });
+                return;
+            }
+
+            resolve({
+                ok: true,
+                messageId: ack.messageId,
+                delivered: !!ack.delivered,
+                queued: !!ack.queued
+            });
         });
     });
 };

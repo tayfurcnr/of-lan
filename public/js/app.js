@@ -219,9 +219,9 @@ function showDesktopNotification(senderId, message) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
     const sender = appUI.users.find((user) => user.id === senderId);
-    const senderName = sender ? sender.displayName || sender.name : 'Yeni mesaj';
+    const senderName = sender ? sender.displayName || sender.name : 'New message';
     const body = message.type === 'text'
-        ? String(message.content || 'Yeni mesaj')
+        ? String(message.content || 'New message')
         : 'A new file was shared.';
 
     const notification = new Notification(senderName, {
@@ -257,7 +257,7 @@ async function apiFetch(url, options = {}) {
     }
 
     if (!response.ok) {
-        throw new Error((payload && payload.error) || 'Istek basarisiz.');
+        throw new Error((payload && payload.error) || 'Request failed.');
     }
 
     return payload;
@@ -281,9 +281,9 @@ function showAuthMode(mode) {
 function handleAuthSwitch(targetMode) {
     if (authMode === targetMode) {
         if (targetMode === 'login') {
-            refs.formLogin.requestSubmit();
+            refs.formLogin.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         } else {
-            refs.formRegister.requestSubmit();
+            refs.formRegister.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         }
         return;
     }
@@ -379,52 +379,80 @@ function renderUsers() {
     });
 }
 
-function getInlineFileIcon(kind) {
+function getIconClass(ext) {
+    if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext)) return 'icon-image';
+    if (['mp4','mov','avi','mkv','webm'].includes(ext)) return 'icon-video';
+    if (['mp3','wav','ogg','flac','aac'].includes(ext)) return 'icon-audio';
+    if (['zip','rar','7z','tar','gz'].includes(ext)) return 'icon-archive';
+    if (ext === 'pdf') return 'icon-pdf';
+    if (['doc','docx'].includes(ext)) return 'icon-doc';
+    if (['xls','xlsx','csv'].includes(ext)) return 'icon-sheet';
+    return '';
+}
+
+function getInlineFileIcon(kind) {
     const lower = String(kind || '').toLowerCase();
-    if (lower === 'pdf') {
-        return `
-            <svg viewBox="0 0 24 24" fill="none">
-                <path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                <path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            </svg>
-        `;
+
+    if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(lower)) {
+        return `<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><path d="M3 15l5-5 4 4 3-3 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+    if (['mp4','mov','avi','mkv','webm'].includes(lower)) {
+        return `<svg viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="3" stroke="currentColor" stroke-width="2"/><path d="M10 9l5 3-5 3V9Z" fill="currentColor"/></svg>`;
+    }
+    if (['mp3','wav','ogg','flac','aac'].includes(lower)) {
+        return `<svg viewBox="0 0 24 24" fill="none"><path d="M9 18V6l12-2v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="2"/></svg>`;
+    }
+    if (['zip','rar','7z','tar','gz'].includes(lower)) {
+        return `<svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 10v2m0 2v2m0 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+    }
+    if (['pdf'].includes(lower)) {
+        return `<svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 13h2a1 1 0 0 1 0 2H9v-2Zm0 0v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+    }
+    if (['doc','docx'].includes(lower)) {
+        return `<svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12h6M9 15h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+    }
+    if (['xls','xlsx','csv'].includes(lower)) {
+        return `<svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12l6 6m0-6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
     }
 
-    return `
-        <svg viewBox="0 0 24 24" fill="none">
-            <path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            <path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-        </svg>
-    `;
+    return `<svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h6l4 4V20.5A1.5 1.5 0 0 1 15.5 22h-8A1.5 1.5 0 0 1 6 20.5v-15A1.5 1.5 0 0 1 7.5 4H7v-.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M13 3.5V8h4.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`;
 }
 
 function renderMessage(message, peerUser) {
     const time = formatTime(message.time || Date.now());
     const side = message.sentByMe ? 'sent' : 'received';
-    const tickIcon = message.read
-        ? `<span class="meta-check read">
-            <svg viewBox="0 0 18 11" fill="none">
-                <path d="M1 5.5L5 9.5L13 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M5 9.5L13 1.5M9 9.5L17 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>`
-        : `<span class="meta-check">
-            <svg viewBox="0 0 12 11" fill="none">
-                <path d="M1 5.5L5 9.5L11 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>`;
+    const tickIcon = message.sentByMe
+        ? (message.queued && !message.delivered
+            ? `<span class="meta-check queued"><svg viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="M6 3.5v2.8l1.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>`
+            : (message.delivered || message.read
+                ? `<span class="meta-check read"><svg viewBox="0 0 16 9" fill="none"><path d="M1 4.5L4 7.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 7.5L12 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`
+                : `<span class="meta-check"><svg viewBox="0 0 10 9" fill="none"><path d="M1 4.5L4 7.5L9 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`))
+        : '';
     const meta = message.sentByMe ? `${time} ${tickIcon}` : time;
 
     if (message.type === 'file') {
+        const avatarName = message.sentByMe
+            ? (appUI.account ? appUI.account.displayName : 'Me')
+            : (peerUser ? peerUser.displayName || peerUser.name : 'User');
+        const avatarUrl = message.sentByMe
+            ? (appUI.account ? appUI.account.avatarUrl : '')
+            : (peerUser ? peerUser.avatarUrl : '');
+        const avatarStyle = message.sentByMe
+            ? 'background: linear-gradient(180deg, #8650f3, #5e2fc4);'
+            : 'background: linear-gradient(180deg, #8b5cf6, #6d45db);';
         return `
             <div class="message-row ${side}">
+                ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', avatarStyle)}
                 <div class="file-card ${message.sentByMe ? 'sent' : ''}">
                     <div class="file-card-top">
-                        <div class="file-icon">${getInlineFileIcon(message.icon || 'file')}</div>
+                        <div class="file-icon ${getIconClass(message.icon || '')}">${getInlineFileIcon(message.icon || 'file')}</div>
                         <div class="file-copy">
-                            <div class="file-name">${escapeHTML(message.name)}</div>
+                            <div class="file-name">${escapeHTML(message.name || message.content)}</div>
                             <div class="file-size">${escapeHTML(message.size || '')}</div>
                         </div>
+                        <a href="${escapeHTML(message.content)}" download class="file-download" title="İndir">
+                            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0-4-4m4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                        </a>
                     </div>
                     <div class="message-meta" style="margin-top: 10px;">${meta}</div>
                 </div>
@@ -475,16 +503,30 @@ function renderChat(userId) {
     const messages = getMessageSeed(userId);
     const html = ['<div class="day-pill">Today</div>'];
 
-    messages.forEach((message) => html.push(renderMessage(message, user)));
+    messages.forEach((message, i) => {
+        if (i > 0) html.push('<hr class="msg-sep">');
+        html.push(renderMessage(message, user));
+    });
 
     refs.chatMessages.innerHTML = html.join('');
     refs.chatMessages.scrollTop = refs.chatMessages.scrollHeight;
 }
 
+async function loadChatHistory(userId) {
+    try {
+        const payload = await apiFetch(`/api/messages/${userId}`);
+        appUI.messages[userId] = payload.messages || [];
+    } catch (error) {
+        if (!appUI.messages[userId]) {
+            appUI.messages[userId] = [];
+        }
+    }
+}
+
 function selectUser(userId) {
     appUI.activeChat = userId;
     renderUsers();
-    renderChat(userId);
+    loadChatHistory(userId).then(() => renderChat(userId));
 }
 
 function closeActiveChat() {
@@ -500,20 +542,26 @@ async function sendChatMessage() {
     if (!text || !appUI.activeChat) return;
 
     const message = { type: 'text', content: text, time: Date.now(), sentByMe: true };
-    const sent = await window.sendMessageToPeer(appUI.activeChat, message);
+    const result = await window.sendMessageToPeer(appUI.activeChat, message);
 
-    if (!sent) {
-        alert('Message could not be sent. The other user may be offline.');
-        return;
-    }
+    if (!result || (!result.ok && !result.queued)) return;
 
-    getMessageSeed(appUI.activeChat).push(message);
+    getMessageSeed(appUI.activeChat).push({
+        ...message,
+        id: result.messageId,
+        delivered: !!result.delivered,
+        queued: !!result.queued,
+        read: !!result.delivered
+    });
     refs.messageInput.value = '';
     renderChat(appUI.activeChat);
 }
 
 appUI.handleIncomingMessage = (senderId, msgObj) => {
-    getMessageSeed(senderId).push({ ...msgObj, sentByMe: false });
+    const seed = getMessageSeed(senderId);
+    if (msgObj.id && seed.some((item) => item.id === msgObj.id)) return;
+
+    seed.push({ ...msgObj, sentByMe: false, delivered: true });
     playIncomingMessageSound();
 
     const shouldNotify = appUI.activeChat !== senderId || document.hidden || !document.hasFocus();
@@ -570,7 +618,10 @@ function getFileBadge(name, isDir) {
 }
 
 function renderFiles(files) {
-    const rows = Array.isArray(files) ? files : [];
+    const rows = Array.isArray(files) ? [...files].sort((a, b) => {
+        if (!!a.isDir !== !!b.isDir) return a.isDir ? -1 : 1;
+        return a.name.localeCompare(b.name);
+    }) : [];
 
     if (!rows.length) {
         refs.folderFilesList.innerHTML = `
@@ -580,8 +631,7 @@ function renderFiles(files) {
                         <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l2 2H18a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-10Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
                     </svg>
                 </div>
-                <h3 style="font-size:18px; margin-top:14px;">Klasor bos</h3>
-                <p style="max-width:280px;">Bu klasorde su anda dosya yok.</p>
+                <p style="max-width:280px; margin-top:14px;">No files here yet — upload something to get started.</p>
             </div>
         `;
         return;
@@ -593,9 +643,11 @@ function renderFiles(files) {
         const modified = file.mtime
             ? new Date(file.mtime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
             : 'Today';
-        const action = isDir
-            ? `<button class="file-download" title="Open" onclick="navigateFolder('${currentFolderDir ? `${currentFolderDir}/` : ''}${file.name}')">></button>`
-            : `<button class="file-download" title="Download" onclick="window.open('/uploads/${currentFolderDir ? `${currentFolderDir}/` : ''}${encodeURIComponent(file.name)}')">v</button>`;
+        const filePath = (currentFolderDir ? `${currentFolderDir}/` : '') + file.name;
+        const actions = isDir
+            ? `<button class="file-download" title="Open" onclick="navigateFolder('${filePath}')"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
+            : `<a class="file-download" href="/uploads/${encodeURIComponent(filePath)}" download title="Download"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0-4-4m4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></a>
+               <button class="file-download" title="Delete" onclick="deleteSharedFile('${filePath}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
 
         return `
             <div class="file-row">
@@ -605,7 +657,7 @@ function renderFiles(files) {
                 </div>
                 <div class="file-row-size">${escapeHTML(size)}</div>
                 <div class="file-row-mod">${escapeHTML(modified)}</div>
-                <div class="file-row-actions">${action}</div>
+                <div class="file-row-actions">${actions}</div>
             </div>
         `;
     }).join('');
@@ -653,6 +705,16 @@ window.navigateFolder = (dir) => {
     fetchFiles();
 };
 
+window.deleteSharedFile = async (filePath) => {
+    if (!confirm(`Delete "${filePath.split('/').pop()}"?`)) return;
+    try {
+        await apiFetch(`/api/folder/file?path=${encodeURIComponent(filePath)}`, { method: 'DELETE' });
+        fetchFiles();
+    } catch (e) {
+        alert('Could not delete: ' + e.message);
+    }
+};
+
 async function openAuthenticatedApp(account) {
     appUI.account = account;
     appUI.myId = account.id;
@@ -690,6 +752,29 @@ async function openAuthenticatedApp(account) {
         if (!payload || !payload.sender || !payload.message) return;
         appUI.handleIncomingMessage(payload.sender, payload.message);
     });
+
+    socket.on('message_delivered', (payload) => {
+        const messageIds = payload && payload.messageIds;
+        if (!Array.isArray(messageIds) || !messageIds.length) return;
+
+        let activeChatChanged = false;
+        for (const [userId, messages] of Object.entries(appUI.messages)) {
+            for (const message of messages) {
+                if (message.id && messageIds.includes(message.id)) {
+                    message.delivered = true;
+                    message.queued = false;
+                    message.read = true;
+                    if (appUI.activeChat === userId) {
+                        activeChatChanged = true;
+                    }
+                }
+            }
+        }
+
+        if (activeChatChanged) {
+            renderChat(appUI.activeChat);
+        }
+    });
 }
 
 async function hydrateSession() {
@@ -712,6 +797,7 @@ async function hydrateSession() {
 
 async function handleLoginSubmit(event) {
     event.preventDefault();
+    console.log('[login] submit fired, username:', refs.loginUsername.value.trim());
     try {
         const payload = await apiFetch('/api/auth/login', {
             method: 'POST',
@@ -825,15 +911,15 @@ function setupEvents() {
         }
     });
 
-    refs.btnDeleteChat.addEventListener('click', () => {
+    refs.btnDeleteChat.addEventListener('click', async () => {
         const userId = refs.chatContextMenu.dataset.userId;
-        if (userId) {
-            appUI.messages[userId] = [];
-            if (appUI.activeChat === userId) {
-                renderChat(userId);
-            }
-            refs.chatContextMenu.classList.add('hidden');
-        }
+        if (!userId) return;
+        refs.chatContextMenu.classList.add('hidden');
+        try {
+            await apiFetch(`/api/messages/${userId}`, { method: 'DELETE' });
+        } catch (_) {}
+        appUI.messages[userId] = [];
+        if (appUI.activeChat === userId) renderChat(userId);
     });
 
     refs.formLogin.addEventListener('submit', handleLoginSubmit);
@@ -891,9 +977,45 @@ function setupEvents() {
 
     refs.btnSend.addEventListener('click', sendChatMessage);
     refs.btnAttach.addEventListener('click', () => refs.fileInput.click());
-    refs.fileInput.addEventListener('change', () => {
-        alert('Dogrudan dosya gonderimi yerine ortak klasor kullanin.');
+    refs.fileInput.addEventListener('change', async () => {
+        const file = refs.fileInput.files[0];
+        if (!file || !appUI.activeChat) { refs.fileInput.value = ''; return; }
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        let uploaded;
+        try {
+            uploaded = await apiFetch('/api/folder/dm-upload', { method: 'POST', body: formData });
+        } catch (e) {
+            alert('File upload failed.');
+            refs.fileInput.value = '';
+            return;
+        }
+
         refs.fileInput.value = '';
+
+        const message = {
+            type: 'file',
+            content: uploaded.url,
+            name: uploaded.name,
+            size: formatSize(uploaded.size),
+            icon: uploaded.name.split('.').pop().toLowerCase(),
+            time: Date.now(),
+            sentByMe: true
+        };
+
+        const result = await window.sendMessageToPeer(appUI.activeChat, message);
+        if (!result || (!result.ok && !result.queued)) return;
+
+        getMessageSeed(appUI.activeChat).push({
+            ...message,
+            id: result.messageId,
+            delivered: !!result.delivered,
+            queued: !!result.queued,
+            read: !!result.delivered
+        });
+        renderChat(appUI.activeChat);
     });
 
     refs.btnSharedFolder.addEventListener('click', () => {

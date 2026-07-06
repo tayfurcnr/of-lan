@@ -716,9 +716,7 @@ dotlottie-wc:not(:defined) {
     flex-direction: row-reverse;
 }
 
-.message-row.received {
-    align-self: flex-start;
-}
+.msg-sep { border: none; border-top: 1px solid rgba(255,255,255,0.05); margin: 0; width: 100%; align-self: stretch; }
 
 .message-stack {
     display: flex;
@@ -728,15 +726,77 @@ dotlottie-wc:not(:defined) {
 }
 
 .message-bubble {
-    padding: 12px 16px;
-    border-radius: 18px;
+    padding: 10px 14px;
+    border-radius: 16px;
     font-size: 14px;
     line-height: 1.45;
     word-break: break-word;
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.message-row.sent .message-bubble {
+    background: linear-gradient(135deg, rgba(120, 60, 220, 0.45), rgba(90, 40, 180, 0.38));
+    border-color: rgba(169, 108, 255, 0.2);
+}
+
+.message-meta {
+    font-size: 11px;
+    color: var(--muted-2);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.message-row.sent .message-meta {
+    justify-content: flex-end;
+}
+
+.meta-check {
+    display: inline-flex;
+    align-items: center;
+    color: var(--muted-2);
+}
+
+.meta-check svg {
+    width: 16px;
+    height: 16px;
+}
+
+.meta-check.read {
+    color: #a96cff;
+}
+
+.meta-check.queued {
+    color: var(--muted-2);
+    opacity: 0.7;
+}
+
+.meta-check.queued svg {
+    width: 14px;
+    height: 14px;
 }
 
 
+.file-card {
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    min-width: 220px;
+    max-width: 320px;
+}
+
+.file-card.sent {
+    background: linear-gradient(135deg, rgba(120, 60, 220, 0.4), rgba(90, 40, 180, 0.32));
+    border-color: rgba(169, 108, 255, 0.2);
+}
+
+.file-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
 .file-icon {
     width: 42px;
     height: 42px;
@@ -751,6 +811,14 @@ dotlottie-wc:not(:defined) {
     width: 22px;
     height: 22px;
 }
+
+.file-icon.icon-image   { background: rgba(68,209,111,0.12);  color: #44d16f; }
+.file-icon.icon-video   { background: rgba(255,107,122,0.12); color: #ff6b7a; }
+.file-icon.icon-audio   { background: rgba(241,194,77,0.12);  color: #f1c24d; }
+.file-icon.icon-archive { background: rgba(255,165,80,0.12);  color: #ffa550; }
+.file-icon.icon-pdf     { background: rgba(255,80,80,0.12);   color: #ff5050; }
+.file-icon.icon-doc     { background: rgba(80,140,255,0.12);  color: #508cff; }
+.file-icon.icon-sheet   { background: rgba(68,209,111,0.12);  color: #44d16f; }
 
 .file-copy {
     min-width: 0;
@@ -1001,7 +1069,7 @@ dotlottie-wc:not(:defined) {
 .table-head {
     padding: 14px 20px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 98px 150px;
+    grid-template-columns: minmax(0, 1fr) 98px 150px 70px;
     gap: 12px;
     color: var(--muted);
     font-size: 13px;
@@ -1017,7 +1085,7 @@ dotlottie-wc:not(:defined) {
 
 .file-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 98px 150px 34px;
+    grid-template-columns: minmax(0, 1fr) 98px 150px 70px;
     gap: 12px;
     align-items: center;
     padding: 12px 10px;
@@ -1069,6 +1137,7 @@ dotlottie-wc:not(:defined) {
 .file-row-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 6px;
 }
 
 .storage-card {

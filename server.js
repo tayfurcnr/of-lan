@@ -10,9 +10,16 @@ const {
     markAccountOffline,
     touchSession
 } = require('./lib/account-store');
+const {
+    saveMessage,
+    markDelivered,
+    getPendingMessages,
+    userExists
+} = require('./lib/message-store');
 const folderRoutes = require('./routes/folder');
 const { authRouter } = require('./routes/auth');
 const { adminRouter } = require('./routes/admin');
+const { messagesRouter } = require('./routes/messages');
 
 const app = express();
 const server = http.createServer(app);
@@ -25,11 +32,13 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads/dm', express.static(path.join(__dirname, 'uploads', 'dm')));
 app.use(express.json());
 
 app.use('/api/folder', folderRoutes);
 app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/messages', messagesRouter);
 
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
@@ -100,6 +109,40 @@ function removeSocketFromMap(map, key, socketId) {
     }
 }
 
+function deliverPendingMessages(recipientId) {
+    const targetSockets = activeSocketsByAccount.get(recipientId);
+    if (!targetSockets || !targetSockets.size) return;
+
+    const pending = getPendingMessages(recipientId);
+    if (!pending.length) return;
+
+    const deliveredIds = [];
+    const sendersToNotify = new Map();
+
+    for (const item of pending) {
+        for (const targetSocketId of targetSockets) {
+            io.to(targetSocketId).emit('direct_message', item);
+        }
+        deliveredIds.push(item.message.id);
+
+        if (!sendersToNotify.has(item.sender)) {
+            sendersToNotify.set(item.sender, []);
+        }
+        sendersToNotify.get(item.sender).push(item.message.id);
+    }
+
+    markDelivered(deliveredIds);
+
+    for (const [senderId, messageIds] of sendersToNotify.entries()) {
+        const senderSockets = activeSocketsByAccount.get(senderId);
+        if (!senderSockets || !senderSockets.size) continue;
+
+        for (const senderSocketId of senderSockets) {
+            io.to(senderSocketId).emit('message_delivered', { messageIds });
+        }
+    }
+}
+
 io.use((socket, next) => {
     const token = socket.handshake.auth && socket.handshake.auth.token
         ? String(socket.handshake.auth.token)
@@ -136,6 +179,7 @@ io.on('connection', (socket) => {
 
     emitSessionState(accountId);
     broadcastUsers();
+    deliverPendingMessages(accountId);
 
     socket.on('request_session_state', () => {
         emitSessionState(accountId);
@@ -147,6 +191,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('direct_message', (data = {}, ack) => {
+        console.log('[direct_message] received:', JSON.stringify(data));
         const freshSession = authenticateToken(socket.data.token);
         if (!freshSession) {
             if (typeof ack === 'function') ack({ ok: false, error: 'Session expired.' });
@@ -160,24 +205,69 @@ io.on('connection', (socket) => {
         });
 
         const targetAccountId = String(data.target || '').trim();
-        const targetSockets = activeSocketsByAccount.get(targetAccountId);
+        const incomingMessage = data.message || {};
+        const messageType = String(incomingMessage.type || 'text').trim();
+        const messageContent = String(incomingMessage.content || '').trim();
 
-        if (!targetAccountId || !targetSockets || !targetSockets.size) {
-            if (typeof ack === 'function') ack({ ok: false, error: 'Target user is offline.' });
+        if (!targetAccountId || targetAccountId === accountId) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'Invalid recipient.' });
             return;
         }
+
+        if (!userExists(targetAccountId)) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'User not found.' });
+            return;
+        }
+
+        if (messageType !== 'text' && messageType !== 'file' || !messageContent) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'Invalid message.' });
+            return;
+        }
+
+        const saved = saveMessage({
+            senderId: accountId,
+            recipientId: targetAccountId,
+            type: messageType,
+            content: messageContent,
+            clientTime: incomingMessage.time
+        });
 
         const payload = {
             sender: accountId,
             senderName: freshSession.account.displayName,
-            message: data.message
+            message: {
+                id: saved.id,
+                type: saved.type,
+                content: saved.content,
+                time: saved.time
+            }
         };
 
-        for (const targetSocketId of targetSockets) {
-            io.to(targetSocketId).emit('direct_message', payload);
+        const targetSockets = activeSocketsByAccount.get(targetAccountId);
+        const isOnline = !!(targetSockets && targetSockets.size);
+
+        if (isOnline) {
+            for (const targetSocketId of targetSockets) {
+                io.to(targetSocketId).emit('direct_message', payload);
+            }
+            markDelivered([saved.id]);
+
+            const senderSockets = activeSocketsByAccount.get(accountId);
+            if (senderSockets && senderSockets.size) {
+                for (const senderSocketId of senderSockets) {
+                    io.to(senderSocketId).emit('message_delivered', { messageIds: [saved.id] });
+                }
+            }
         }
 
-        if (typeof ack === 'function') ack({ ok: true });
+        if (typeof ack === 'function') {
+            ack({
+                ok: true,
+                messageId: saved.id,
+                delivered: isOnline,
+                queued: !isOnline
+            });
+        }
     });
 
     socket.on('disconnect', () => {
