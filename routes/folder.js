@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const archiver = require('archiver');
+const { ZipArchive } = require('archiver');
 const fs = require('fs');
 const path = require('path');
 const { authenticateToken } = require('../lib/account-store');
@@ -191,7 +191,7 @@ router.get('/download', (req, res) => {
         `attachment; filename="${asciiName}.zip"; filename*=UTF-8''${encodeURIComponent(folderName)}.zip`
     );
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = new ZipArchive({ store: true });
     archive.on('error', (err) => {
         if (!res.headersSent) {
             res.status(500).json({ error: err.message });
@@ -201,7 +201,7 @@ router.get('/download', (req, res) => {
     });
 
     archive.pipe(res);
-    archive.directory(targetPath, false);
+    archive.directory(targetPath, folderName);
     archive.finalize();
 });
 
