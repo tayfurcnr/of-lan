@@ -853,6 +853,52 @@ dotlottie-wc:not(:defined) {
     border-color: rgba(169, 108, 255, 0.2);
 }
 
+.chat-image-card {
+    max-width: 280px;
+}
+
+.chat-image {
+    display: block;
+    width: 100%;
+    max-height: 320px;
+    object-fit: cover;
+    border-radius: 16px;
+    cursor: zoom-in;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chat-image-meta {
+    margin-top: 6px;
+}
+
+.modal-overlay.image-preview-overlay {
+    z-index: 60;
+    background: rgba(3, 4, 10, 0.92);
+}
+
+.image-preview-img {
+    max-width: min(90vw, 1100px);
+    max-height: 88vh;
+    border-radius: 12px;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+}
+
+.image-preview-close,
+.image-preview-download {
+    position: fixed;
+    top: 20px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.image-preview-close {
+    right: 20px;
+}
+
+.image-preview-download {
+    right: 72px;
+    text-decoration: none;
+}
+
 .file-card-top {
     display: flex;
     align-items: center;

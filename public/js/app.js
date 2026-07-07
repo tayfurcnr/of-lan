@@ -70,7 +70,11 @@ const refs = {
     folderContextMenu: document.getElementById('folder-context-menu'),
     chatContextMenu: document.getElementById('chat-context-menu'),
     btnDeleteChat: document.getElementById('btn-delete-chat'),
-    serverPresence: document.getElementById('server-presence')
+    serverPresence: document.getElementById('server-presence'),
+    modalImagePreview: document.getElementById('modal-image-preview'),
+    imagePreviewImg: document.getElementById('image-preview-img'),
+    imagePreviewDownload: document.getElementById('image-preview-download'),
+    btnCloseImagePreview: document.getElementById('btn-close-image-preview')
 };
 
 let currentFolderDir = '';
@@ -591,6 +595,18 @@ function renderMessage(message, peerUser) {
             `;
         }
 
+        if (getIconClass(message.icon || '') === 'icon-image') {
+            return `
+                <div class="message-row ${side}">
+                    ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', avatarStyle)}
+                    <div class="chat-image-card">
+                        <img class="chat-image" src="${escapeHTML(message.content)}" alt="${escapeHTML(message.name || 'image')}" loading="lazy" onclick="openImagePreview('${escapeHTML(message.content)}')">
+                        <div class="message-meta chat-image-meta">${meta}</div>
+                    </div>
+                </div>
+            `;
+        }
+
         return `
             <div class="message-row ${side}">
                 ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', avatarStyle)}
@@ -668,6 +684,13 @@ function renderChat(userId) {
 
     refs.chatMessages.innerHTML = html.join('');
     refs.chatMessages.scrollTop = refs.chatMessages.scrollHeight;
+
+    refs.chatMessages.querySelectorAll('.chat-image').forEach((img) => {
+        if (img.complete) return;
+        img.addEventListener('load', () => {
+            refs.chatMessages.scrollTop = refs.chatMessages.scrollHeight;
+        }, { once: true });
+    });
 }
 
 async function loadChatHistory(userId) {
@@ -884,6 +907,17 @@ window.navigateFolder = (dir) => {
     fetchFiles();
 };
 
+window.openImagePreview = (url) => {
+    refs.imagePreviewImg.src = url;
+    refs.imagePreviewDownload.href = url;
+    refs.modalImagePreview.classList.remove('hidden');
+};
+
+function closeImagePreview() {
+    refs.modalImagePreview.classList.add('hidden');
+    refs.imagePreviewImg.src = '';
+}
+
 window.deleteSharedFile = async (filePath) => {
     if (!confirm(`Delete "${filePath.split('/').pop()}"?`)) return;
     try {
@@ -1019,6 +1053,17 @@ function openFileMenu(x, y, name, filePath) {
 
     refs.folderContextMenu.dataset.name = name;
     refs.folderContextMenu.dataset.path = filePath;
+}
+
+function openImageMenu(x, y, imageUrl) {
+    showFolderContextMenu(x, y, `
+        <a class="context-item" href="${escapeHTML(imageUrl)}" download data-action="download">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0-4-4m4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Download
+        </a>
+    `);
+
+    refs.folderContextMenu.dataset.path = imageUrl;
 }
 
 function openEmptyAreaMenu(x, y) {
@@ -1301,7 +1346,9 @@ function setupEvents() {
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (!refs.folderContextMenu.classList.contains('hidden')) {
+            if (!refs.modalImagePreview.classList.contains('hidden')) {
+                closeImagePreview();
+            } else if (!refs.folderContextMenu.classList.contains('hidden')) {
                 hideFolderContextMenu();
             } else if (!refs.folderSidebar.classList.contains('hidden')) {
                 refs.folderSidebar.classList.add('hidden');
@@ -1335,6 +1382,13 @@ function setupEvents() {
         const tempId = row && row.getAttribute('data-temp-id');
         const cancel = tempId && activeUploads.get(tempId);
         if (cancel) cancel();
+    });
+
+    refs.chatMessages.addEventListener('contextmenu', (event) => {
+        const image = event.target.closest('.chat-image');
+        if (!image) return;
+        event.preventDefault();
+        openImageMenu(event.clientX, event.clientY, image.src);
     });
     refs.fileInput.addEventListener('change', async () => {
         const file = refs.fileInput.files[0];
@@ -1435,6 +1489,11 @@ function setupEvents() {
             refs.folderSidebar.classList.add('hidden');
         });
     }
+
+    refs.btnCloseImagePreview.addEventListener('click', closeImagePreview);
+    refs.modalImagePreview.addEventListener('click', (event) => {
+        if (event.target === refs.modalImagePreview) closeImagePreview();
+    });
 
     refs.btnNewFolder.addEventListener('click', () => createNewFolder());
 

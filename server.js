@@ -259,6 +259,9 @@ io.on('connection', (socket) => {
         const incomingMessage = data.message || {};
         const messageType = String(incomingMessage.type || 'text').trim();
         const messageContent = String(incomingMessage.content || '').trim();
+        const messageName = incomingMessage.name ? String(incomingMessage.name) : '';
+        const messageSize = incomingMessage.size ? String(incomingMessage.size) : '';
+        const messageIcon = incomingMessage.icon ? String(incomingMessage.icon) : '';
 
         if (!targetAccountId || targetAccountId === accountId) {
             if (typeof ack === 'function') ack({ ok: false, error: 'Invalid recipient.' });
@@ -280,7 +283,10 @@ io.on('connection', (socket) => {
             recipientId: targetAccountId,
             type: messageType,
             content: messageContent,
-            clientTime: incomingMessage.time
+            clientTime: incomingMessage.time,
+            name: messageName,
+            size: messageSize,
+            icon: messageIcon
         });
 
         const payload = {
@@ -290,6 +296,9 @@ io.on('connection', (socket) => {
                 id: saved.id,
                 type: saved.type,
                 content: saved.content,
+                name: saved.name,
+                size: saved.size,
+                icon: saved.icon,
                 time: saved.time
             }
         };
