@@ -28,7 +28,8 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage });
+const MAX_AVATAR_SIZE = 15 * 1024 * 1024;
+const upload = multer({ storage, limits: { fileSize: MAX_AVATAR_SIZE } });
 
 function getTokenFromRequest(req) {
     const header = req.headers.authorization || '';
@@ -127,7 +128,19 @@ router.post('/logout', authRequired, (req, res) => {
     res.json({ success: true });
 });
 
-router.patch('/profile', authRequired, upload.single('avatar'), (req, res) => {
+router.patch('/profile', authRequired, (req, res, next) => {
+    upload.single('avatar')(req, res, (error) => {
+        if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+            res.status(400).json({ error: 'Avatar image cannot exceed 15 MB.' });
+            return;
+        }
+        if (error) {
+            res.status(400).json({ error: error.message || 'Upload failed.' });
+            return;
+        }
+        next();
+    });
+}, (req, res) => {
     try {
         const avatarUrl = req.file ? `/uploads/avatars/${req.file.filename}` : undefined;
         const account = updateProfile(req.account.id, {

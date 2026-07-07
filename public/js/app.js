@@ -1690,10 +1690,15 @@ async function handleRegisterSubmit(event) {
     }
 }
 
+const MAX_AVATAR_SIZE = 15 * 1024 * 1024;
+
 async function saveSettings() {
     const formData = new FormData();
     formData.append('displayName', refs.inputDisplayName.value.trim());
     if (refs.inputAvatar.files[0]) {
+        if (refs.inputAvatar.files[0].size > MAX_AVATAR_SIZE) {
+            throw new Error('Avatar image cannot exceed 15 MB.');
+        }
         formData.append('avatar', refs.inputAvatar.files[0]);
     }
 
