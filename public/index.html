@@ -309,6 +309,14 @@
                 </div>
 
                 <div class="shared-actions">
+                    <button class="secondary-button small-button" id="btn-new-folder">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l2 2H18a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-10Z"
+                                stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                            <path d="M12 11v4m-2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                        New Folder
+                    </button>
                     <input type="file" id="folder-upload-input" class="hidden">
                     <button class="primary-button small-button" id="btn-folder-upload">
                         <svg viewBox="0 0 24 24" fill="none">
@@ -337,7 +345,7 @@
                         <input type="text" placeholder="Search files...">
                     </label>
                     <div class="view-toggle">
-                        <button class="toggle-button active" aria-label="Liste gorunumu">
+                        <button class="toggle-button active" id="btn-view-list" data-view="list" aria-label="Liste gorunumu">
                             <svg viewBox="0 0 24 24" fill="none">
                                 <path d="M8 6h12M8 12h12M8 18h12" stroke="currentColor" stroke-width="2"
                                     stroke-linecap="round" />
@@ -345,7 +353,7 @@
                                     stroke-linecap="round" />
                             </svg>
                         </button>
-                        <button class="toggle-button" aria-label="Grid gorunumu">
+                        <button class="toggle-button" id="btn-view-grid" data-view="grid" aria-label="Grid gorunumu">
                             <svg viewBox="0 0 24 24" fill="none">
                                 <rect x="4" y="4" width="6" height="6" rx="1.5" stroke="currentColor"
                                     stroke-width="2" />
@@ -364,7 +372,7 @@
                     <span id="folder-breadcrumb">Shared / Files</span>
                 </div>
 
-                <div class="files-table">
+                <div class="files-table" id="folder-files-table">
                     <div class="table-head">
                         <span>Name</span>
                         <span>Size</span>
@@ -394,6 +402,8 @@
             Delete Chat
         </button>
     </div>
+
+    <div id="folder-context-menu" class="context-menu hidden"></div>
 
     <script src="js/webrtc.js"></script>
     <script type="module" src="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js"></script>

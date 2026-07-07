@@ -574,7 +574,8 @@ svg {
 }
 
 .large-accent-button svg,
-.primary-button svg {
+.primary-button svg,
+.secondary-button svg {
     width: 18px;
     height: 18px;
     flex-shrink: 0;
@@ -1125,6 +1126,7 @@ dotlottie-wc:not(:defined) {
     align-items: center;
     gap: 8px;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .shared-search-row {
@@ -1212,10 +1214,21 @@ dotlottie-wc:not(:defined) {
     padding: 12px 10px;
     border-radius: 14px;
     transition: 0.16s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+}
+
+.file-row[data-is-dir="true"] {
+    cursor: pointer;
 }
 
 .file-row:hover {
     background: rgba(255, 255, 255, 0.03);
+}
+
+.file-row-actions:empty {
+    display: none;
 }
 
 .file-name-cell {
@@ -1259,6 +1272,80 @@ dotlottie-wc:not(:defined) {
     display: flex;
     justify-content: flex-end;
     gap: 6px;
+}
+
+.files-table.grid-mode .table-head {
+    display: none;
+}
+
+.files-table.grid-mode .files-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 12px;
+    align-content: start;
+}
+
+.files-table.grid-mode .file-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 6px;
+    padding: 16px 10px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.files-table.grid-mode .file-row:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.09);
+}
+
+.files-table.grid-mode .file-name-cell {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+}
+
+.files-table.grid-mode .file-badge {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+}
+
+.files-table.grid-mode .file-badge svg {
+    width: 26px;
+    height: 26px;
+}
+
+.files-table.grid-mode .file-row-name {
+    width: 100%;
+    white-space: normal;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 13px;
+}
+
+.files-table.grid-mode .file-row-size {
+    font-size: 11px;
+}
+
+.files-table.grid-mode .file-row-mod {
+    display: none;
+}
+
+.files-table.grid-mode .file-row-actions {
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.files-table.grid-mode .file-row:hover .file-row-actions {
+    opacity: 1;
 }
 
 .storage-card {
@@ -1964,6 +2051,51 @@ dotlottie-wc:not(:defined) {
 .context-item svg {
     width: 18px;
     height: 18px;
+}
+
+.context-item-static {
+    cursor: default;
+    flex-wrap: wrap;
+}
+
+.context-item-static:hover {
+    background: transparent;
+}
+
+.color-swatch-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding-left: 26px;
+}
+
+.color-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+}
+
+.color-swatch:hover {
+    transform: scale(1.12);
+}
+
+.color-swatch-reset {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.75);
+    display: grid;
+    place-items: center;
+}
+
+.color-swatch-reset svg {
+    width: 11px;
+    height: 11px;
 }
 
 @media (max-width: 720px) {

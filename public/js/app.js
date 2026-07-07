@@ -61,16 +61,21 @@ const refs = {
     btnSharedFolder: document.getElementById('btn-shared-folder'),
     btnCloseFolder: document.getElementById('btn-close-folder'),
     btnFolderUpload: document.getElementById('btn-folder-upload'),
+    btnNewFolder: document.getElementById('btn-new-folder'),
     folderUploadInput: document.getElementById('folder-upload-input'),
     folderFilesList: document.getElementById('folder-files-list'),
+    folderFilesTable: document.getElementById('folder-files-table'),
     folderBreadcrumb: document.getElementById('folder-breadcrumb'),
     folderEmptyState: document.getElementById('folder-empty-state'),
+    folderContextMenu: document.getElementById('folder-context-menu'),
     chatContextMenu: document.getElementById('chat-context-menu'),
     btnDeleteChat: document.getElementById('btn-delete-chat'),
     serverPresence: document.getElementById('server-presence')
 };
 
 let currentFolderDir = '';
+let currentFolderView = localStorage.getItem('oflan_folder_view') === 'grid' ? 'grid' : 'list';
+let lastFolderFiles = [];
 let audioContext = null;
 let notificationPermissionRequested = false;
 let authMode = 'login';
@@ -762,10 +767,11 @@ function handleSessionState(payload) {
     renderChat(appUI.activeChat);
 }
 
-function getFileBadge(name, isDir) {
+function getFileBadge(name, isDir, color) {
     if (isDir) {
+        const tint = color || '#f6c34f';
         return `
-            <div class="file-badge" style="background: rgba(244, 194, 81, 0.18); color: #f6c34f;">
+            <div class="file-badge" style="background: ${tint}26; color: ${tint};">
                 <svg viewBox="0 0 24 24" fill="none">
                     <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l2 2H18a2.5 2.5 0 0 1 2.5 2.5v1" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
                     <path d="M3.5 9v7.5A2.5 2.5 0 0 0 6 19h12a2.5 2.5 0 0 0 2.5-2.5v-8" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
@@ -785,6 +791,12 @@ function getFileBadge(name, isDir) {
 }
 
 function renderFiles(files) {
+    if (Array.isArray(files)) lastFolderFiles = files;
+
+    if (refs.folderFilesTable) {
+        refs.folderFilesTable.classList.toggle('grid-mode', currentFolderView === 'grid');
+    }
+
     const rows = Array.isArray(files) ? [...files].sort((a, b) => {
         if (!!a.isDir !== !!b.isDir) return a.isDir ? -1 : 1;
         return a.name.localeCompare(b.name);
@@ -812,14 +824,14 @@ function renderFiles(files) {
             : 'Today';
         const filePath = (currentFolderDir ? `${currentFolderDir}/` : '') + file.name;
         const actions = isDir
-            ? `<button class="file-download" title="Open" onclick="navigateFolder('${filePath}')"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
+            ? ''
             : `<a class="file-download" href="/uploads/${encodeURIComponent(filePath)}" download title="Download"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0-4-4m4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></a>
                <button class="file-download" title="Delete" onclick="deleteSharedFile('${filePath}')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
 
         return `
-            <div class="file-row">
+            <div class="file-row" data-path="${escapeHTML(filePath)}" data-name="${escapeHTML(file.name)}" data-is-dir="${isDir}">
                 <div class="file-name-cell">
-                    ${getFileBadge(file.name, isDir)}
+                    ${getFileBadge(file.name, isDir, file.color)}
                     <div class="file-row-name">${escapeHTML(file.name)}</div>
                 </div>
                 <div class="file-row-size">${escapeHTML(size)}</div>
@@ -881,6 +893,125 @@ window.deleteSharedFile = async (filePath) => {
         alert('Could not delete: ' + e.message);
     }
 };
+
+async function createNewFolder() {
+    const name = prompt('Folder name:');
+    if (!name || !name.trim()) return;
+
+    try {
+        await apiFetch('/api/folder/mkdir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dir: currentFolderDir, name: name.trim() })
+        });
+        fetchFiles();
+    } catch (e) {
+        alert('Could not create folder: ' + e.message);
+    }
+}
+
+async function renameFolderItem(name) {
+    const newName = prompt('New name:', name);
+    if (!newName || !newName.trim() || newName.trim() === name) return;
+
+    try {
+        await apiFetch('/api/folder/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dir: currentFolderDir, oldName: name, newName: newName.trim() })
+        });
+        fetchFiles();
+    } catch (e) {
+        alert('Could not rename: ' + e.message);
+    }
+}
+
+async function deleteFolderItem(filePath) {
+    if (!confirm(`Delete folder "${filePath.split('/').pop()}" and everything inside it?`)) return;
+
+    try {
+        await apiFetch(`/api/folder/folder?path=${encodeURIComponent(filePath)}`, { method: 'DELETE' });
+        fetchFiles();
+    } catch (e) {
+        alert('Could not delete folder: ' + e.message);
+    }
+}
+
+async function setFolderItemColor(filePath, color) {
+    try {
+        await apiFetch('/api/folder/color', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: filePath, color })
+        });
+        fetchFiles();
+    } catch (e) {
+        alert('Could not set color: ' + e.message);
+    }
+}
+
+const FOLDER_COLOR_SWATCHES = ['#f6c34f', '#7d47f1', '#44d16f', '#ff6b7a', '#508cff', '#ffa550'];
+
+function hideFolderContextMenu() {
+    refs.folderContextMenu.classList.add('hidden');
+    refs.folderContextMenu.innerHTML = '';
+}
+
+function showFolderContextMenu(x, y, html) {
+    refs.folderContextMenu.innerHTML = html;
+    refs.folderContextMenu.classList.remove('hidden');
+
+    const menuRect = refs.folderContextMenu.getBoundingClientRect();
+    const maxLeft = window.innerWidth - menuRect.width - 8;
+    const maxTop = window.innerHeight - menuRect.height - 8;
+    refs.folderContextMenu.style.left = `${Math.max(8, Math.min(x, maxLeft))}px`;
+    refs.folderContextMenu.style.top = `${Math.max(8, Math.min(y, maxTop))}px`;
+}
+
+function openFolderMenu(x, y, name, filePath) {
+    const swatches = FOLDER_COLOR_SWATCHES.map((color) => `
+        <button type="button" class="color-swatch" style="background:${color}" data-color="${color}" title="${color}"></button>
+    `).join('');
+
+    showFolderContextMenu(x, y, `
+        <button type="button" class="context-item" data-action="open">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Open
+        </button>
+        <button type="button" class="context-item" data-action="rename">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+            Rename
+        </button>
+        <div class="context-item context-item-static">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg>
+            Color
+            <div class="color-swatch-row">${swatches}
+                <button type="button" class="color-swatch color-swatch-reset" data-color="" title="Reset">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+            </div>
+        </div>
+        <button type="button" class="context-item text-danger" data-action="delete">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Delete Folder
+        </button>
+    `);
+
+    refs.folderContextMenu.dataset.name = name;
+    refs.folderContextMenu.dataset.path = filePath;
+}
+
+function openEmptyAreaMenu(x, y) {
+    showFolderContextMenu(x, y, `
+        <button type="button" class="context-item" data-action="new-folder">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l2 2H18a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-10Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                <path d="M12 11v4m-2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            New Folder
+        </button>
+    `);
+}
 
 async function loadUnreadCounts() {
     try {
@@ -1150,7 +1281,9 @@ function setupEvents() {
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (!refs.folderSidebar.classList.contains('hidden')) {
+            if (!refs.folderContextMenu.classList.contains('hidden')) {
+                hideFolderContextMenu();
+            } else if (!refs.folderSidebar.classList.contains('hidden')) {
                 refs.folderSidebar.classList.add('hidden');
             } else if (!refs.modalSettings.classList.contains('hidden')) {
                 refs.modalSettings.classList.add('hidden');
@@ -1283,6 +1416,63 @@ function setupEvents() {
         });
     }
 
+    refs.btnNewFolder.addEventListener('click', () => createNewFolder());
+
+    refs.folderFilesList.addEventListener('dblclick', (event) => {
+        const row = event.target.closest('.file-row');
+        if (row && row.dataset.isDir === 'true') {
+            window.navigateFolder(row.dataset.path);
+        }
+    });
+
+    refs.folderFilesList.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        const row = event.target.closest('.file-row');
+
+        if (row && row.dataset.isDir === 'true') {
+            openFolderMenu(event.clientX, event.clientY, row.dataset.name, row.dataset.path);
+        } else if (!row) {
+            openEmptyAreaMenu(event.clientX, event.clientY);
+        }
+    });
+
+    refs.folderContextMenu.addEventListener('click', (event) => {
+        const swatch = event.target.closest('.color-swatch');
+        if (swatch) {
+            const { path } = refs.folderContextMenu.dataset;
+            setFolderItemColor(path, swatch.dataset.color || '');
+            hideFolderContextMenu();
+            return;
+        }
+
+        const actionButton = event.target.closest('[data-action]');
+        if (!actionButton) return;
+
+        const { name, path } = refs.folderContextMenu.dataset;
+        hideFolderContextMenu();
+
+        switch (actionButton.dataset.action) {
+            case 'open':
+                window.navigateFolder(path);
+                break;
+            case 'rename':
+                renameFolderItem(name);
+                break;
+            case 'delete':
+                deleteFolderItem(path);
+                break;
+            case 'new-folder':
+                createNewFolder();
+                break;
+        }
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!refs.folderContextMenu.classList.contains('hidden') && !refs.folderContextMenu.contains(event.target)) {
+            hideFolderContextMenu();
+        }
+    });
+
     refs.btnFolderUpload.addEventListener('click', () => refs.folderUploadInput.click());
     refs.folderUploadInput.addEventListener('change', async () => {
         const file = refs.folderUploadInput.files[0];
@@ -1306,10 +1496,20 @@ function setupEvents() {
         }
     });
 
-    document.querySelectorAll('.toggle-button').forEach((button) => {
+    document.querySelectorAll('.toggle-button[data-view]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.view === currentFolderView);
         button.addEventListener('click', () => {
-            document.querySelectorAll('.toggle-button').forEach((btn) => btn.classList.remove('active'));
-            button.classList.add('active');
+            const view = button.dataset.view === 'grid' ? 'grid' : 'list';
+            if (view === currentFolderView) return;
+
+            currentFolderView = view;
+            localStorage.setItem('oflan_folder_view', view);
+
+            document.querySelectorAll('.toggle-button[data-view]').forEach((btn) => {
+                btn.classList.toggle('active', btn === button);
+            });
+
+            renderFiles(lastFolderFiles);
         });
     });
 }
