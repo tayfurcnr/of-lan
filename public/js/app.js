@@ -1440,6 +1440,16 @@ async function openAuthenticatedApp(account) {
     appUI.myId = account.id;
     refs.modalAuth.classList.add('hidden');
     refs.app.classList.remove('hidden');
+
+    // #app was display:none until now, so any dotlottie-wc inside it initialized
+    // at 0x0 and can render at the wrong size for a frame. Reload it now that it
+    // has real layout dimensions.
+    document.querySelectorAll('#no-chat-selected dotlottie-wc').forEach((el) => {
+        const src = el.getAttribute('src');
+        el.removeAttribute('src');
+        requestAnimationFrame(() => el.setAttribute('src', src));
+    });
+
     renderProfile();
     fetchFiles();
     loadUnreadCounts();
