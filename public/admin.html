@@ -263,6 +263,46 @@
         .btn-icon:hover { background: var(--surface3); color: var(--text); border-color: var(--border-hover); }
         .btn-icon svg { width: 16px; height: 16px; }
 
+        .btn-pill {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 0 14px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .btn-pill:hover {
+            background: var(--surface3);
+            border-color: var(--border-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-pill.danger {
+            background: rgba(224,82,82,0.12);
+            border-color: rgba(224,82,82,0.28);
+            color: #ffb6b6;
+        }
+
+        .btn-pill.danger:hover {
+            background: rgba(224,82,82,0.18);
+            border-color: rgba(224,82,82,0.4);
+        }
+
+        .btn-pill svg {
+            width: 14px;
+            height: 14px;
+        }
+
         /* ── MAIN CONTENT ── */
         .content {
             flex: 1;
@@ -322,6 +362,64 @@
         .search-bar:focus {
             border-color: var(--accent);
             box-shadow: 0 0 0 3px rgba(124,92,252,0.15);
+        }
+
+        .backup-info-box {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            background: linear-gradient(135deg, rgba(124,92,252,0.12), rgba(31,35,48,0.92));
+            border: 1px solid rgba(124,92,252,0.22);
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+        }
+
+        .reset-info-box {
+            background: linear-gradient(135deg, rgba(224,82,82,0.12), rgba(31,35,48,0.92));
+            border-color: rgba(224,82,82,0.22);
+        }
+
+        .backup-info-label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--text-dim);
+            margin-bottom: 4px;
+        }
+
+        .backup-info-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .backup-info-sub {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.45;
+        }
+
+        .backup-info-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .backup-info-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: var(--text-muted);
+            font-size: 12px;
         }
 
         /* ── USER TABLE ── */
@@ -954,6 +1052,19 @@
             <button class="btn-icon" id="btn-refresh" title="Refresh">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M4 4v6h6M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10A8 8 0 0 0 6.4 5.6L4 8m16 8-2.4 2.4A8 8 0 0 1 4 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
+            <button class="btn-pill" id="btn-backup-download" title="Download backup">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0-4-4m4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                Backup
+            </button>
+            <button class="btn-pill" id="btn-backup-restore" title="Restore backup">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 21v-12m0 0 4 4m-4-4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 5h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                Restore
+            </button>
+            <button class="btn-pill danger" id="btn-system-reset" title="Reset database and uploads">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10.3 4.5 2.8 18a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+                Reset
+            </button>
+            <input id="backup-file-input" type="file" accept=".tar.gz,.tgz" hidden>
             <button class="btn-icon" id="btn-logout-admin" title="Sign Out">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -964,11 +1075,35 @@
         <div class="section-header">
             <div>
                 <div class="section-title">Users</div>
-                <div class="section-sub">View and manage all accounts</div>
+                <div class="section-sub">View and manage all accounts. Backups include data and uploads, and restore on next restart.</div>
             </div>
             <div class="search-wrap">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 <input class="search-bar" id="search-input" type="text" placeholder="Search..." autocomplete="off">
+            </div>
+        </div>
+
+        <div class="backup-info-box" id="backup-info-box">
+            <div>
+                <span class="backup-info-label">Backup Status</span>
+                <div class="backup-info-title" id="backup-info-title">No backup downloaded yet</div>
+                <div class="backup-info-sub" id="backup-info-sub">Download a backup to see its timestamp and app version here.</div>
+            </div>
+            <div class="backup-info-meta">
+                <span class="backup-info-chip" id="backup-info-version">Version: -</span>
+                <span class="backup-info-chip" id="backup-info-date">Generated: -</span>
+            </div>
+        </div>
+
+        <div class="backup-info-box reset-info-box" id="reset-info-box">
+            <div>
+                <span class="backup-info-label">Reset Status</span>
+                <div class="backup-info-title" id="reset-info-title">Database and uploads are not reset</div>
+                <div class="backup-info-sub" id="reset-info-sub">Reset clears the current data and uploads on the next server restart.</div>
+            </div>
+            <div class="backup-info-meta">
+                <span class="backup-info-chip" id="reset-info-state">State: idle</span>
+                <span class="backup-info-chip" id="reset-info-action">Action: pending</span>
             </div>
         </div>
 
@@ -1058,6 +1193,10 @@
     let allUsers = [];
     let editingUserId = null;
     let deletingUserId = null;
+    let lastBackupInfo = null;
+    let lastResetInfo = null;
+    const BACKUP_INFO_KEY = 'oflan_admin_backup_info';
+    const RESET_INFO_KEY = 'oflan_admin_reset_info';
 
     const $ = (id) => document.getElementById(id);
 
@@ -1073,6 +1212,84 @@
                ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
     }
 
+    function readStoredBackupInfo() {
+        try {
+            const raw = localStorage.getItem(BACKUP_INFO_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function readStoredResetInfo() {
+        try {
+            const raw = localStorage.getItem(RESET_INFO_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function storeBackupInfo(info) {
+        lastBackupInfo = info || null;
+        try {
+            if (info) {
+                localStorage.setItem(BACKUP_INFO_KEY, JSON.stringify(info));
+            } else {
+                localStorage.removeItem(BACKUP_INFO_KEY);
+            }
+        } catch {
+            // ignore storage failures
+        }
+        renderBackupInfo();
+    }
+
+    function storeResetInfo(info) {
+        lastResetInfo = info || null;
+        try {
+            if (info) {
+                localStorage.setItem(RESET_INFO_KEY, JSON.stringify(info));
+            } else {
+                localStorage.removeItem(RESET_INFO_KEY);
+            }
+        } catch {
+            // ignore storage failures
+        }
+        renderResetInfo();
+    }
+
+    function renderBackupInfo() {
+        const info = lastBackupInfo;
+        if (!info) {
+            $('backup-info-title').textContent = 'No backup downloaded yet';
+            $('backup-info-sub').textContent = 'Download a backup to see its timestamp and app version here.';
+            $('backup-info-version').textContent = 'Version: -';
+            $('backup-info-date').textContent = 'Generated: -';
+            return;
+        }
+
+        $('backup-info-title').textContent = info.filename || 'Backup ready';
+        $('backup-info-sub').textContent = info.includes ? `Includes: ${info.includes.replace(/,/g, ', ')}` : 'Includes: data and uploads';
+        $('backup-info-version').textContent = `Version: ${info.version || '-'}`;
+        $('backup-info-date').textContent = `Generated: ${formatDate(info.generatedAt)}`;
+    }
+
+    function renderResetInfo() {
+        const info = lastResetInfo;
+        if (!info) {
+            $('reset-info-title').textContent = 'Database and uploads are not reset';
+            $('reset-info-sub').textContent = 'Reset clears the current data and uploads on the next server restart.';
+            $('reset-info-state').textContent = 'State: idle';
+            $('reset-info-action').textContent = 'Action: pending';
+            return;
+        }
+
+        $('reset-info-title').textContent = info.title || 'Reset staged';
+        $('reset-info-sub').textContent = info.message || 'Restart the server to apply the reset.';
+        $('reset-info-state').textContent = `State: ${info.state || 'staged'}`;
+        $('reset-info-action').textContent = `Action: ${formatDate(info.stagedAt)}`;
+    }
+
     function toast(msg, type = 'success') {
         const el = document.createElement('div');
         el.className = `toast-item ${type}`;
@@ -1086,12 +1303,83 @@
         return 'Basic ' + btoa(user + ':' + pass);
     }
 
+    function buildAdminHeaders(opts = {}) {
+        const headers = { 'Authorization': adminCreds, ...(opts.headers || {}) };
+        const body = opts.body;
+        const shouldSetJson = body && !(body instanceof FormData) && !(body instanceof Blob);
+        if (shouldSetJson && !headers['Content-Type']) {
+            headers['Content-Type'] = 'application/json';
+        }
+        return headers;
+    }
+
     async function adminFetch(path, opts = {}) {
-        const headers = { 'Authorization': adminCreds, 'Content-Type': 'application/json', ...(opts.headers || {}) };
+        const headers = buildAdminHeaders(opts);
         const res = await fetch('/api/admin' + path, { ...opts, headers });
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.error || 'An error occurred.');
         return data;
+    }
+
+    async function downloadAdminBackup() {
+        const res = await fetch('/api/admin/backup', {
+            headers: buildAdminHeaders()
+        });
+
+        if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new Error(data?.error || 'Failed to create backup.');
+        }
+
+        const blob = await res.blob();
+        const generatedAt = res.headers.get('X-Backup-Generated-At') || new Date().toISOString();
+        const version = res.headers.get('X-Backup-App-Version') || 'unknown';
+        const includes = res.headers.get('X-Backup-Includes') || 'data,uploads';
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = 'oflan-backup.tar.gz';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        storeBackupInfo({ generatedAt, version, includes, filename: 'OF-LAN backup' });
+    }
+
+    async function restoreAdminBackup(file) {
+        const formData = new FormData();
+        formData.append('backup', file);
+
+        const res = await fetch('/api/admin/backup/restore', {
+            method: 'POST',
+            headers: buildAdminHeaders({ body: formData }),
+            body: formData
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || 'Failed to stage restore.');
+        return data;
+    }
+
+    async function resetAdminSystem() {
+        const confirmText = prompt('Type RESET to clear the database and uploads on the next restart.');
+        if (!confirmText || confirmText.trim().toUpperCase() !== 'RESET') {
+            return;
+        }
+
+        const res = await adminFetch('/reset', {
+            method: 'POST',
+            body: JSON.stringify({ confirm: 'RESET' })
+        });
+
+        storeResetInfo({
+            title: 'Reset staged',
+            message: res.message || 'Restart the server to apply the reset.',
+            state: 'staged',
+            stagedAt: new Date().toISOString()
+        });
+        storeBackupInfo(null);
+        return res;
     }
 
     // ── LOGIN FORM ──
@@ -1202,6 +1490,89 @@
         loadUsers();
         toast('User list refreshed.', 'success');
     });
+
+    $('btn-backup-download').addEventListener('click', async () => {
+        const btn = $('btn-backup-download');
+        const previous = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Backup';
+        try {
+            await downloadAdminBackup();
+            toast('Backup downloaded.', 'success');
+        } catch (err) {
+            toast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = previous;
+        }
+    });
+
+    $('btn-backup-restore').addEventListener('click', () => {
+        $('backup-file-input').click();
+    });
+
+    $('btn-system-reset').addEventListener('click', async () => {
+        const btn = $('btn-system-reset');
+        const previous = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Reset';
+
+        try {
+            const result = await resetAdminSystem();
+            if (result) {
+                toast(result.message || 'Reset staged. Restart the server to apply.', 'success');
+            }
+        } catch (err) {
+            toast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = previous;
+        }
+    });
+
+    $('backup-file-input').addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        const ok = confirm('Restore this backup? The restore will apply after the server restarts and will replace current data and uploads.');
+        if (!ok) {
+            e.target.value = '';
+            return;
+        }
+
+        const btn = $('btn-backup-restore');
+        const previous = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Restore';
+
+        try {
+            const result = await restoreAdminBackup(file);
+            toast(result.message || 'Restore staged. Restart the server to apply.', 'success');
+            storeBackupInfo({
+                generatedAt: new Date().toISOString(),
+                version: 'pending restore',
+                includes: 'data,uploads',
+                filename: `Restoring: ${file.name}`
+            });
+        } catch (err) {
+            toast(err.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = previous;
+            e.target.value = '';
+        }
+    });
+
+    const storedBackupInfo = readStoredBackupInfo();
+    const storedResetInfo = readStoredResetInfo();
+    if (storedBackupInfo) {
+        lastBackupInfo = storedBackupInfo;
+    }
+    if (storedResetInfo) {
+        lastResetInfo = storedResetInfo;
+    }
+    renderBackupInfo();
+    renderResetInfo();
 
     // ── LOGOUT ──
     $('btn-logout-admin').addEventListener('click', () => {
