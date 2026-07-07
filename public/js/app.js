@@ -11,6 +11,8 @@ const appUI = {
 
 window.appUI = appUI;
 
+const activeUploads = new Map();
+
 const refs = {
     app: document.getElementById('app'),
     modalAuth: document.getElementById('modal-auth'),
@@ -122,6 +124,113 @@ function formatSize(bytes) {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getUploadToastHost() {
+    let host = document.getElementById('upload-toasts');
+    if (!host) {
+        host = document.createElement('div');
+        host.id = 'upload-toasts';
+        host.className = 'upload-toasts';
+        document.body.appendChild(host);
+    }
+    return host;
+}
+
+function createUploadToast(file, { onCancel } = {}) {
+    const host = getUploadToastHost();
+    const kind = file.name.split('.').pop().toLowerCase();
+
+    const toast = document.createElement('div');
+    toast.className = 'upload-toast';
+    toast.innerHTML = `
+        <div class="upload-toast-icon">${getInlineFileIcon(kind)}</div>
+        <div class="upload-toast-body">
+            <div class="upload-toast-row">
+                <span class="upload-toast-name">${escapeHTML(file.name)}</span>
+                <span class="upload-toast-percent">0%</span>
+            </div>
+            <div class="upload-toast-bar"><div class="upload-toast-fill" style="width:0%"></div></div>
+            <div class="upload-toast-status">${formatSize(file.size)}</div>
+        </div>
+        ${onCancel ? `
+        <button type="button" class="upload-toast-cancel" title="Cancel upload" aria-label="Cancel upload">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>` : ''}
+    `;
+    host.appendChild(toast);
+
+    const fill = toast.querySelector('.upload-toast-fill');
+    const percentLabel = toast.querySelector('.upload-toast-percent');
+    const statusLabel = toast.querySelector('.upload-toast-status');
+    const cancelButton = toast.querySelector('.upload-toast-cancel');
+
+    if (cancelButton) {
+        cancelButton.addEventListener('click', () => onCancel());
+    }
+
+    return {
+        update(percent) {
+            const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+            fill.style.width = `${clamped}%`;
+            percentLabel.textContent = `${clamped}%`;
+        },
+        success() {
+            fill.style.width = '100%';
+            percentLabel.textContent = '100%';
+            statusLabel.textContent = 'Uploaded';
+            toast.classList.add('upload-toast-success');
+            if (cancelButton) cancelButton.remove();
+            setTimeout(() => toast.remove(), 1400);
+        },
+        error(message) {
+            toast.classList.add('upload-toast-error');
+            statusLabel.textContent = message || 'Upload failed';
+            if (cancelButton) cancelButton.remove();
+            setTimeout(() => toast.remove(), 2600);
+        }
+    };
+}
+
+function uploadFileWithProgress(url, formData, onProgress) {
+    const xhr = new XMLHttpRequest();
+
+    const promise = new Promise((resolve, reject) => {
+        xhr.open('POST', url);
+
+        const token = getAuthToken();
+        if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+
+        xhr.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable && onProgress) {
+                onProgress((event.loaded / event.total) * 100);
+            }
+        });
+
+        xhr.addEventListener('load', () => {
+            let payload = null;
+            try {
+                payload = JSON.parse(xhr.responseText);
+            } catch (error) {
+                payload = null;
+            }
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(payload);
+            } else {
+                reject(new Error((payload && payload.error) || 'Upload failed.'));
+            }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('Upload failed.')));
+        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled.')));
+
+        xhr.send(formData);
+    });
+
+    return { promise, cancel: () => xhr.abort() };
 }
 
 function formatRelativeTime(value) {
@@ -442,6 +551,33 @@ function renderMessage(message, peerUser) {
         const avatarStyle = message.sentByMe
             ? 'background: linear-gradient(180deg, #8650f3, #5e2fc4);'
             : 'background: linear-gradient(180deg, #8b5cf6, #6d45db);';
+
+        if (message.uploading) {
+            return `
+                <div class="message-row ${side}" data-temp-id="${escapeHTML(message.tempId)}">
+                    ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', avatarStyle)}
+                    <div class="file-card sent file-card-uploading">
+                        <div class="file-card-top">
+                            <div class="file-icon ${getIconClass(message.icon || '')}">${getInlineFileIcon(message.icon || 'file')}</div>
+                            <div class="file-copy">
+                                <div class="file-name">${escapeHTML(message.name || '')}</div>
+                                <div class="file-progress"><span class="file-upload-fill"></span></div>
+                            </div>
+                        </div>
+                        <div class="file-progress-meta">
+                            <span>Uploading…</span>
+                            <div class="file-upload-actions">
+                                <span class="file-upload-percent">0%</span>
+                                <button type="button" class="file-upload-cancel" title="Cancel upload" aria-label="Cancel upload">
+                                    <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         return `
             <div class="message-row ${side}">
                 ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', avatarStyle)}
@@ -990,22 +1126,64 @@ function setupEvents() {
 
     refs.btnSend.addEventListener('click', sendChatMessage);
     refs.btnAttach.addEventListener('click', () => refs.fileInput.click());
+    refs.chatMessages.addEventListener('click', (event) => {
+        const cancelButton = event.target.closest('.file-upload-cancel');
+        if (!cancelButton) return;
+
+        const row = cancelButton.closest('[data-temp-id]');
+        const tempId = row && row.getAttribute('data-temp-id');
+        const cancel = tempId && activeUploads.get(tempId);
+        if (cancel) cancel();
+    });
     refs.fileInput.addEventListener('change', async () => {
         const file = refs.fileInput.files[0];
-        if (!file || !appUI.activeChat) { refs.fileInput.value = ''; return; }
+        const chatId = appUI.activeChat;
+        if (!file || !chatId) { refs.fileInput.value = ''; return; }
+
+        const seed = getMessageSeed(chatId);
+        const tempId = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const placeholder = {
+            type: 'file',
+            tempId,
+            uploading: true,
+            name: file.name,
+            icon: file.name.split('.').pop().toLowerCase(),
+            time: Date.now(),
+            sentByMe: true
+        };
+        seed.push(placeholder);
+        if (appUI.activeChat === chatId) renderChat(chatId);
 
         const formData = new FormData();
         formData.append('file', file);
 
+        const updateProgress = (percent) => {
+            const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+            const bubble = refs.chatMessages.querySelector(`[data-temp-id="${tempId}"]`);
+            if (bubble) {
+                const fill = bubble.querySelector('.file-upload-fill');
+                const percentLabel = bubble.querySelector('.file-upload-percent');
+                if (fill) fill.style.width = `${clamped}%`;
+                if (percentLabel) percentLabel.textContent = `${clamped}%`;
+            }
+        };
+
+        const upload = uploadFileWithProgress('/api/folder/dm-upload', formData, updateProgress);
+        activeUploads.set(tempId, () => upload.cancel());
+
         let uploaded;
         try {
-            uploaded = await apiFetch('/api/folder/dm-upload', { method: 'POST', body: formData });
+            uploaded = await upload.promise;
         } catch (e) {
-            alert('File upload failed.');
+            activeUploads.delete(tempId);
+            const index = seed.indexOf(placeholder);
+            if (index !== -1) seed.splice(index, 1);
+            if (appUI.activeChat === chatId) renderChat(chatId);
             refs.fileInput.value = '';
             return;
         }
 
+        activeUploads.delete(tempId);
         refs.fileInput.value = '';
 
         const message = {
@@ -1018,17 +1196,29 @@ function setupEvents() {
             sentByMe: true
         };
 
-        const result = await window.sendMessageToPeer(appUI.activeChat, message);
-        if (!result || (!result.ok && !result.queued)) return;
+        const result = await window.sendMessageToPeer(chatId, message);
+        const index = seed.indexOf(placeholder);
 
-        getMessageSeed(appUI.activeChat).push({
+        if (!result || (!result.ok && !result.queued)) {
+            if (index !== -1) seed.splice(index, 1);
+            if (appUI.activeChat === chatId) renderChat(chatId);
+            return;
+        }
+
+        const finalMessage = {
             ...message,
             id: result.messageId,
             delivered: !!result.delivered,
             queued: !!result.queued,
             read: !!result.delivered
-        });
-        renderChat(appUI.activeChat);
+        };
+
+        if (index !== -1) {
+            seed[index] = finalMessage;
+        } else {
+            seed.push(finalMessage);
+        }
+        if (appUI.activeChat === chatId) renderChat(chatId);
     });
 
     refs.btnSharedFolder.addEventListener('click', () => {
@@ -1050,12 +1240,16 @@ function setupEvents() {
         const formData = new FormData();
         formData.append('file', file);
 
+        const query = currentFolderDir ? `?dir=${encodeURIComponent(currentFolderDir)}` : '';
+        const upload = uploadFileWithProgress(`/api/folder/upload${query}`, formData, (percent) => toast.update(percent));
+        const toast = createUploadToast(file, { onCancel: () => upload.cancel() });
+
         try {
-            const query = currentFolderDir ? `?dir=${encodeURIComponent(currentFolderDir)}` : '';
-            await apiFetch(`/api/folder/upload${query}`, { method: 'POST', body: formData });
+            await upload.promise;
+            toast.success();
             fetchFiles();
         } catch (error) {
-            alert('File upload failed: ' + error.message);
+            toast.error(error.message);
         } finally {
             refs.folderUploadInput.value = '';
         }

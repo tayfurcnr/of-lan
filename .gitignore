@@ -1,0 +1,15 @@
+node_modules/
+
+# Uploaded/shared files
+uploads/
+
+# Runtime data (accounts, messages, sqlite db)
+data/
+
+# Logs
+*.log
+server.err
+
+# Editor/OS
+.vscode/
+.DS_Store
