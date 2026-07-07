@@ -560,6 +560,7 @@ function renderMessage(message, peerUser) {
             : 'background: linear-gradient(180deg, #8b5cf6, #6d45db);';
 
         if (message.uploading) {
+            const percent = Math.max(0, Math.min(100, Math.round(message.percent || 0)));
             return `
                 <div class="message-row ${side}" data-temp-id="${escapeHTML(message.tempId)}">
                     ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', avatarStyle)}
@@ -568,13 +569,13 @@ function renderMessage(message, peerUser) {
                             <div class="file-icon ${getIconClass(message.icon || '')}">${getInlineFileIcon(message.icon || 'file')}</div>
                             <div class="file-copy">
                                 <div class="file-name">${escapeHTML(message.name || '')}</div>
-                                <div class="file-progress"><span class="file-upload-fill"></span></div>
+                                <div class="file-progress"><span class="file-upload-fill" style="width:${percent}%"></span></div>
                             </div>
                         </div>
                         <div class="file-progress-meta">
                             <span>Uploading…</span>
                             <div class="file-upload-actions">
-                                <span class="file-upload-percent">0%</span>
+                                <span class="file-upload-percent">${percent}%</span>
                                 <button type="button" class="file-upload-cancel" title="Cancel upload" aria-label="Cancel upload">
                                     <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                                 </button>
@@ -665,12 +666,14 @@ function renderChat(userId) {
 }
 
 async function loadChatHistory(userId) {
+    const pendingUploads = (appUI.messages[userId] || []).filter((message) => message.uploading);
+
     try {
         const payload = await apiFetch(`/api/messages/${userId}`);
-        appUI.messages[userId] = payload.messages || [];
+        appUI.messages[userId] = [...(payload.messages || []), ...pendingUploads];
     } catch (error) {
         if (!appUI.messages[userId]) {
-            appUI.messages[userId] = [];
+            appUI.messages[userId] = pendingUploads;
         }
     }
 }
@@ -1151,18 +1154,18 @@ function setupEvents() {
         const chatId = appUI.activeChat;
         if (!file || !chatId) { refs.fileInput.value = ''; return; }
 
-        const seed = getMessageSeed(chatId);
         const tempId = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const placeholder = {
             type: 'file',
             tempId,
             uploading: true,
+            percent: 0,
             name: file.name,
             icon: file.name.split('.').pop().toLowerCase(),
             time: Date.now(),
             sentByMe: true
         };
-        seed.push(placeholder);
+        getMessageSeed(chatId).push(placeholder);
         if (appUI.activeChat === chatId) renderChat(chatId);
 
         const formData = new FormData();
@@ -1170,6 +1173,7 @@ function setupEvents() {
 
         const updateProgress = (percent) => {
             const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+            placeholder.percent = clamped;
             const bubble = refs.chatMessages.querySelector(`[data-temp-id="${tempId}"]`);
             if (bubble) {
                 const fill = bubble.querySelector('.file-upload-fill');
@@ -1187,6 +1191,7 @@ function setupEvents() {
             uploaded = await upload.promise;
         } catch (e) {
             activeUploads.delete(tempId);
+            const seed = getMessageSeed(chatId);
             const index = seed.indexOf(placeholder);
             if (index !== -1) seed.splice(index, 1);
             if (appUI.activeChat === chatId) renderChat(chatId);
@@ -1208,6 +1213,7 @@ function setupEvents() {
         };
 
         const result = await window.sendMessageToPeer(chatId, message);
+        const seed = getMessageSeed(chatId);
         const index = seed.indexOf(placeholder);
 
         if (!result || (!result.ok && !result.queued)) {
