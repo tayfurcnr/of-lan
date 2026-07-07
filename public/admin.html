@@ -780,6 +780,133 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+
+        @media (max-width: 900px) {
+            .topbar {
+                flex-wrap: wrap;
+                justify-content: space-between;
+                padding: 16px 18px;
+                gap: 10px;
+            }
+
+            .topbar-right {
+                width: 100%;
+                justify-content: flex-start;
+                gap: 10px;
+                flex-wrap: wrap;
+            }
+
+            .topbar-logo {
+                flex: 1 1 100%;
+            }
+
+            .content {
+                padding: 20px 16px;
+            }
+
+            .section-header {
+                flex-wrap: wrap;
+                gap: 14px;
+            }
+
+            .search-wrap {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .search-bar {
+                width: 100%;
+                min-width: 0;
+            }
+
+            .table-card {
+                overflow-x: auto;
+            }
+
+            table {
+                min-width: 740px;
+            }
+
+            .btn-icon {
+                width: 36px;
+                height: 36px;
+            }
+
+            .modal-card {
+                width: min(100vw - 28px, 480px);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .login-card {
+                padding: 28px 22px;
+                max-width: 100%;
+            }
+
+            .topbar {
+                padding: 14px 16px;
+            }
+
+            .topbar-logo {
+                gap: 8px;
+            }
+
+            .topbar-title {
+                font-size: 14px;
+            }
+
+            .topbar-badge {
+                padding: 4px 8px;
+                font-size: 10px;
+            }
+
+            .user-count-badge {
+                width: 100%;
+                justify-content: space-between;
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+
+            .section-header {
+                align-items: flex-start;
+            }
+
+            .section-title {
+                font-size: 18px;
+            }
+
+            .content {
+                padding: 16px 12px;
+            }
+
+            .table-card {
+                margin: 0 -12px;
+                padding: 0 12px 12px;
+            }
+
+            .modal-header,
+            .modal-body,
+            .modal-footer {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            .modal-footer {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .btn-cancel,
+            .btn-save,
+            .btn-danger {
+                width: 100%;
+            }
+
+            .btn-icon {
+                width: 34px;
+                height: 34px;
+            }
+        }
     </style>
 </head>
 <body>

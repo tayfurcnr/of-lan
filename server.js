@@ -21,6 +21,15 @@ const { authRouter } = require('./routes/auth');
 const { adminRouter } = require('./routes/admin');
 const { messagesRouter } = require('./routes/messages');
 
+let bonjour;
+let bonjourService = null;
+try {
+    ({ Bonjour } = require('bonjour-service'));
+    bonjour = new Bonjour();
+} catch (error) {
+    bonjour = null;
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -39,6 +48,48 @@ app.use('/api/folder', folderRoutes);
 app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/messages', messagesRouter);
+
+function advertiseService(port) {
+    if (!bonjour) return null;
+
+    const preferredHost = process.env.OFLAN_HOSTNAME || 'oflan.local';
+    const serviceName = process.env.OFLAN_SERVICE_NAME || 'OF-LAN';
+    const hostname = preferredHost.endsWith('.local') ? preferredHost : `${preferredHost}.local`;
+
+    try {
+        bonjourService = bonjour.publish({
+            name: serviceName,
+            type: 'http',
+            port,
+            host: hostname,
+            txt: {
+                app: 'of-lan'
+            }
+        });
+        return bonjourService;
+    } catch (error) {
+        console.warn('mDNS advertisement failed:', error.message);
+        return null;
+    }
+}
+
+function shutdown() {
+    if (bonjourService && typeof bonjourService.stop === 'function') {
+        try {
+            bonjourService.stop();
+        } catch (error) {
+            console.warn('Failed to stop mDNS service:', error.message);
+        }
+    }
+
+    if (bonjour && typeof bonjour.destroy === 'function') {
+        try {
+            bonjour.destroy();
+        } catch (error) {
+            console.warn('Failed to destroy mDNS browser:', error.message);
+        }
+    }
+}
 
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
@@ -285,7 +336,33 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server listening on port ${PORT}`);
+const HOST = process.env.OFLAN_BIND_HOST || '0.0.0.0';
+const PORT = 80;
+
+server.once('error', (error) => {
+    console.error(`Failed to start server on port ${PORT}:`, error.message);
+    if (error.code === 'EACCES') {
+        console.error('Port 80 requires elevated privileges. Run the server as root or grant bind permission.');
+    }
+    process.exit(1);
+});
+
+server.listen(PORT, HOST, () => {
+    console.log('Server listening on http://oflan.local');
+    const advertised = advertiseService(PORT);
+    if (advertised) {
+        console.log('mDNS advertised as http://oflan.local');
+    } else {
+        console.log('mDNS not available; configure your LAN DNS or hosts file for oflan.local');
+    }
+});
+
+process.on('SIGINT', () => {
+    shutdown();
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    shutdown();
+    process.exit(0);
 });

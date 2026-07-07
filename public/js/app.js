@@ -56,7 +56,6 @@ const refs = {
     fileInput: document.getElementById('file-input'),
     folderSidebar: document.getElementById('modal-folder'),
     btnSharedFolder: document.getElementById('btn-shared-folder'),
-    btnFolderRefresh: document.getElementById('btn-folder-refresh'),
     btnCloseFolder: document.getElementById('btn-close-folder'),
     btnFolderUpload: document.getElementById('btn-folder-upload'),
     folderUploadInput: document.getElementById('folder-upload-input'),
@@ -388,9 +387,12 @@ function getIconClass(ext) {
     if (['doc','docx'].includes(ext)) return 'icon-doc';
     if (['xls','xlsx','csv'].includes(ext)) return 'icon-sheet';
     return '';
-}
-
-function getInlineFileIcon(kind) {
+}
+
+
+
+function getInlineFileIcon(kind) {
+
     const lower = String(kind || '').toLowerCase();
 
     if (['jpg','jpeg','png','gif','webp','svg','bmp'].includes(lower)) {
@@ -480,10 +482,16 @@ function renderMessage(message, peerUser) {
 }
 
 function renderChat(userId) {
+    const isMobile = window.innerWidth <= 768;
+
     if (!userId) {
         refs.noChatSelected.classList.remove('hidden');
         refs.chatContainer.classList.add('hidden');
         refs.chatMessages.innerHTML = '';
+
+        if (isMobile) {
+            refs.noChatSelected.classList.add('hidden');
+        }
         return;
     }
 
@@ -1029,7 +1037,6 @@ function setupEvents() {
         });
     }
 
-    refs.btnFolderRefresh.addEventListener('click', fetchFiles);
     refs.btnFolderUpload.addEventListener('click', () => refs.folderUploadInput.click());
     refs.folderUploadInput.addEventListener('change', async () => {
         const file = refs.folderUploadInput.files[0];
@@ -1040,8 +1047,10 @@ function setupEvents() {
 
         try {
             const query = currentFolderDir ? `?dir=${encodeURIComponent(currentFolderDir)}` : '';
-            await fetch(`/api/folder/upload${query}`, { method: 'POST', body: formData });
+            await apiFetch(`/api/folder/upload${query}`, { method: 'POST', body: formData });
             fetchFiles();
+        } catch (error) {
+            alert('File upload failed: ' + error.message);
         } finally {
             refs.folderUploadInput.value = '';
         }
@@ -1056,6 +1065,13 @@ function setupEvents() {
 }
 
 function init() {
+    const isMobile = window.innerWidth <= 768;
+
+    if (isMobile) {
+        refs.noChatSelected.classList.add('hidden');
+        refs.chatContainer.classList.add('hidden');
+    }
+
     setupEvents();
     showAuthMode('login');
     hydrateSession();

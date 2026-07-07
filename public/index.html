@@ -298,44 +298,34 @@
     <div id="modal-folder" class="modal-overlay hidden">
         <div class="modal-card folder-card">
             <header class="shared-header">
-                    <div class="shared-title">
+                <div class="shared-title">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l2 2H18a2.5 2.5 0 0 1 2.5 2.5v1"
+                            stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                        <path d="M3.5 9v8.5A2.5 2.5 0 0 0 6 20h12a2.5 2.5 0 0 0 2.5-2.5v-9" stroke="currentColor"
+                            stroke-width="2" stroke-linejoin="round" />
+                    </svg>
+                    <span>Shared Area</span>
+                </div>
+
+                <div class="shared-actions">
+                    <input type="file" id="folder-upload-input" class="hidden">
+                    <button class="primary-button small-button" id="btn-folder-upload">
                         <svg viewBox="0 0 24 24" fill="none">
-                            <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l2 2H18a2.5 2.5 0 0 1 2.5 2.5v1"
-                                stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
-                            <path d="M3.5 9v8.5A2.5 2.5 0 0 0 6 20h12a2.5 2.5 0 0 0 2.5-2.5v-9" stroke="currentColor"
-                                stroke-width="2" stroke-linejoin="round" />
+                            <path d="M12 3v12m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M5 15.5v2.5A2.5 2.5 0 0 0 7.5 20h9A2.5 2.5 0 0 0 19 17.5v-2.5"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" />
                         </svg>
-                        <span>Shared Area</span>
-                    </div>
-                    <button class="icon-button" id="btn-close-folder" aria-label="Kapat" title="Kapat (Esc)">
-                        <svg viewBox="0 0 24 24" fill="none">
-                            <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
+                        Upload
                     </button>
-                    <div class="shared-actions">
-                        <button class="icon-button" id="btn-folder-refresh" aria-label="Yenile">
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <path d="M20 12a8 8 0 0 0-14-5.3" stroke="currentColor" stroke-width="2"
-                                    stroke-linecap="round" />
-                                <path d="M6 6H2v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round" />
-                                <path d="M4 12a8 8 0 0 0 14 5.3" stroke="currentColor" stroke-width="2"
-                                    stroke-linecap="round" />
-                                <path d="M18 18h4v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round" />
-                            </svg>
-                        </button>
-                        <input type="file" id="folder-upload-input" class="hidden">
-                        <button class="primary-button small-button" id="btn-folder-upload">
-                            <svg viewBox="0 0 24 24" fill="none">
-                                <path d="M12 3v12m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="2"
-                                    stroke-linecap="round" stroke-linejoin="round" />
-                                <path d="M5 15.5v2.5A2.5 2.5 0 0 0 7.5 20h9A2.5 2.5 0 0 0 19 17.5v-2.5"
-                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                            </svg>
-                            Upload
-                        </button>
-                    </div>
+                </div>
+
+                <button class="icon-button folder-close" id="btn-close-folder" aria-label="Kapat" title="Kapat (Esc)">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
                 </header>
 
                 <div class="shared-search-row">
