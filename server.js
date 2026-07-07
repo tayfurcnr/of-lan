@@ -3,6 +3,21 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const cors = require('cors');
+const { applyPendingReset, applyPendingRestore } = require('./lib/restore-manager');
+
+try {
+    const resetResult = applyPendingReset();
+    if (resetResult.applied) {
+        console.log('Applied pending system reset');
+    }
+    const restoreResult = applyPendingRestore();
+    if (restoreResult.applied) {
+        console.log(`Applied pending restore from ${restoreResult.originalName}`);
+    }
+} catch (error) {
+    console.error('Pending restore could not be applied:', error.message);
+}
+
 const {
     authenticateToken,
     getSessionPayload,
@@ -27,12 +42,17 @@ const { adminRouter } = require('./routes/admin');
 const { messagesRouter } = require('./routes/messages');
 const { groupsRouter, setGroupNotifier } = require('./routes/groups');
 
+const ENABLE_MDNS = process.env.OFLAN_ENABLE_MDNS === '1';
 let bonjour;
 let bonjourService = null;
-try {
-    ({ Bonjour } = require('bonjour-service'));
-    bonjour = new Bonjour();
-} catch (error) {
+if (ENABLE_MDNS) {
+    try {
+        ({ Bonjour } = require('bonjour-service'));
+        bonjour = new Bonjour();
+    } catch (error) {
+        bonjour = null;
+    }
+} else {
     bonjour = null;
 }
 
@@ -535,7 +555,7 @@ io.on('connection', (socket) => {
 });
 
 const HOST = process.env.OFLAN_BIND_HOST || '0.0.0.0';
-const PORT = 80;
+const PORT = Number(process.env.PORT || 80);
 
 server.once('error', (error) => {
     console.error(`Failed to start server on port ${PORT}:`, error.message);
@@ -547,11 +567,11 @@ server.once('error', (error) => {
 
 server.listen(PORT, HOST, () => {
     console.log('Server listening on http://oflan.local');
-    const advertised = advertiseService(PORT);
+    const advertised = ENABLE_MDNS ? advertiseService(PORT) : null;
     if (advertised) {
         console.log('mDNS advertised as http://oflan.local');
     } else {
-        console.log('mDNS not available; configure your LAN DNS or hosts file for oflan.local');
+        console.log('mDNS disabled; configure your LAN DNS or hosts file for oflan.local');
     }
 });
 

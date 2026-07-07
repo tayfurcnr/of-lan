@@ -42,7 +42,7 @@ body {
         radial-gradient(circle at bottom center, rgba(80, 37, 160, 0.2), transparent 36%),
         linear-gradient(180deg, #050612 0%, #070914 45%, #05060f 100%);
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: hidden;
 }
 
 body::before {
@@ -2199,12 +2199,12 @@ dotlottie-wc:not(:defined) {
 
 @media (max-width: 1180px) {
     body {
-        overflow: auto;
+        overflow: hidden;
     }
 
     .desktop-shell {
         width: calc(100vw - 16px);
-        height: auto;
+        height: calc(100dvh - 16px);
         min-height: calc(100dvh - 16px);
         margin: 8px;
     }
