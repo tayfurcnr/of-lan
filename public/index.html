@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/styles.css">
+    <link rel="modulepreload" href="https://unpkg.com/@lottiefiles/dotlottie-wc@latest/dist/dotlottie-wc.js">
 </head>
 
 <body>
@@ -22,6 +23,8 @@
                     src="/Chatbot_OF-LAN.lottie"
                     autoplay
                     loop
+                    width="150"
+                    height="150"
                     style="width: 150px; height: 150px;">
                 </dotlottie-wc>
             </div>
@@ -255,6 +258,8 @@
                             src="/Chatbot_OF-LAN.lottie"
                             autoplay
                             loop
+                            width="280"
+                            height="280"
                             style="width: 280px; height: 280px;">
                         </dotlottie-wc>
                     </div>
@@ -271,6 +276,13 @@
                             </div>
                         </div>
                         <div class="chat-tools">
+                            <button class="icon-button hidden" id="btn-group-members" aria-label="Grup uyeleri" title="Grup uyeleri">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M17 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 5 18.5V20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                    <circle cx="9.5" cy="8" r="3" stroke="currentColor" stroke-width="2" />
+                                    <path d="M16 8.2a3 3 0 0 1 0 5.8M19.5 20v-1.5a3.3 3.3 0 0 0-2.2-3.1" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                            </button>
                             <button class="icon-button hidden" id="btn-leave-group" aria-label="Gruptan ayril" title="Gruptan ayril">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -474,6 +486,28 @@
                     <button type="submit" class="primary-button block-button" id="group-create-confirm">Create Group</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="modal-group-members" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-kicker">Group</div>
+                    <h2 id="group-members-title">Members</h2>
+                </div>
+                <button type="button" class="icon-button" id="group-members-close" aria-label="Kapat">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <label class="field-label">Members</label>
+                <div class="group-member-list" id="group-members-current"></div>
+                <label class="field-label">Add members</label>
+                <div class="group-member-list" id="group-members-addable"></div>
+            </div>
         </div>
     </div>
 

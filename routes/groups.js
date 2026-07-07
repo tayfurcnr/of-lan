@@ -1,10 +1,12 @@
 const express = require('express');
 const { authenticateToken, touchSession } = require('../lib/account-store');
+const { userExists } = require('../lib/message-store');
 const {
     createGroup,
     getUserGroups,
     getGroup,
     isGroupMember,
+    addGroupMember,
     leaveGroup,
     getGroupMessages
 } = require('../lib/group-store');
@@ -79,6 +81,30 @@ router.get('/:id/messages', authRequired, (req, res) => {
         limit: req.query.limit ? Number(req.query.limit) : 100
     });
     res.json({ messages });
+});
+
+router.post('/:id/members', authRequired, (req, res) => {
+    const groupId = req.params.id;
+    if (!isGroupMember(groupId, req.account.id)) {
+        res.status(404).json({ error: 'Group not found.' });
+        return;
+    }
+
+    const userId = String(req.body.userId || '').trim();
+    if (!userId || !userExists(userId)) {
+        res.status(400).json({ error: 'User not found.' });
+        return;
+    }
+
+    if (isGroupMember(groupId, userId)) {
+        res.status(409).json({ error: 'User is already in this group.' });
+        return;
+    }
+
+    addGroupMember(groupId, userId);
+    const group = getGroup(groupId);
+    notifyGroupUpdated(group.members.map((member) => member.id));
+    res.json({ group });
 });
 
 router.post('/:id/leave', authRequired, (req, res) => {

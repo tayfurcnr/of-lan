@@ -488,6 +488,52 @@ svg {
     color: var(--text);
 }
 
+.group-member-row.static {
+    cursor: default;
+}
+
+.group-member-row.static:hover {
+    background: transparent;
+}
+
+.group-member-row-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 14px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.group-member-add-btn {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(123, 62, 240, 0.18);
+    color: var(--accent-3);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+}
+
+.group-member-add-btn:hover {
+    background: rgba(123, 62, 240, 0.32);
+}
+
+.group-member-add-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.group-member-empty {
+    padding: 8px 10px;
+    font-size: 13px;
+    color: var(--muted);
+}
+
 .group-avatar {
     background: linear-gradient(180deg, #7d47f1, #4c2196);
     display: grid;
@@ -711,6 +757,8 @@ dotlottie-wc {
     display: block;
     aspect-ratio: 1 / 1;
     flex-shrink: 0;
+    contain: size layout;
+    overflow: hidden;
 }
 
 dotlottie-wc:not(:defined) {

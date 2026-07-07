@@ -3,6 +3,7 @@ const AUTH_TOKEN_KEY = 'officelan_auth_token';
 const appUI = {
     users: [],
     groups: [],
+    openGroupMembersId: null,
     activeChat: null,
     messages: {},
     unreadCounts: {},
@@ -54,6 +55,12 @@ const refs = {
     groupCreateError: document.getElementById('group-create-error'),
     groupCreateConfirm: document.getElementById('group-create-confirm'),
     groupCreateCancel: document.getElementById('group-create-cancel'),
+    btnGroupMembers: document.getElementById('btn-group-members'),
+    modalGroupMembers: document.getElementById('modal-group-members'),
+    groupMembersTitle: document.getElementById('group-members-title'),
+    groupMembersCurrent: document.getElementById('group-members-current'),
+    groupMembersAddable: document.getElementById('group-members-addable'),
+    groupMembersClose: document.getElementById('group-members-close'),
     onlineCount: document.getElementById('online-count'),
     searchUsers: document.getElementById('search-users'),
     btnUsersRefresh: document.getElementById('btn-users-refresh'),
@@ -637,6 +644,71 @@ async function fetchGroups() {
         appUI.groups = [];
     }
     renderGroups();
+
+    if (!refs.modalGroupMembers.classList.contains('hidden') && appUI.openGroupMembersId) {
+        renderGroupMembersModal(appUI.openGroupMembersId);
+    }
+}
+
+function renderGroupMembersModal(groupId) {
+    const group = appUI.groups.find((item) => item.id === groupId);
+    if (!group) {
+        refs.modalGroupMembers.classList.add('hidden');
+        appUI.openGroupMembersId = null;
+        return;
+    }
+
+    refs.groupMembersTitle.textContent = group.name;
+
+    refs.groupMembersCurrent.innerHTML = group.members.map((member) => `
+        <div class="group-member-row static">
+            ${getAvatarMarkup(member.displayName, member.avatarUrl, 'avatar-sm')}
+            <span class="group-member-row-name">${escapeHTML(member.displayName)}</span>
+        </div>
+    `).join('');
+
+    const memberIds = new Set(group.members.map((member) => member.id));
+    const addableUsers = appUI.users.filter((user) => !memberIds.has(user.id));
+
+    refs.groupMembersAddable.innerHTML = addableUsers.length
+        ? addableUsers.map((user) => `
+            <div class="group-member-row static">
+                ${getAvatarMarkup(user.displayName || user.name, user.avatarUrl, 'avatar-sm')}
+                <span class="group-member-row-name">${escapeHTML(user.displayName || user.name)}</span>
+                <button type="button" class="group-member-add-btn" data-user-id="${escapeHTML(user.id)}" title="Add to group" aria-label="Add to group">
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+            </div>
+        `).join('')
+        : '<div class="group-member-empty">Everyone is already in this group.</div>';
+
+    refs.groupMembersAddable.querySelectorAll('.group-member-add-btn').forEach((button) => {
+        button.addEventListener('click', async () => {
+            button.disabled = true;
+            try {
+                await apiFetch(`/api/groups/${groupId}/members`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: button.dataset.userId })
+                });
+                await fetchGroups();
+            } catch (error) {
+                alert('Could not add member: ' + error.message);
+                button.disabled = false;
+            }
+        });
+    });
+}
+
+function openGroupMembersModal(groupId) {
+    appUI.openGroupMembersId = groupId;
+    renderGroupMembersModal(groupId);
+    refs.modalGroupMembers.classList.remove('hidden');
+}
+
+function closeGroupMembersModal() {
+    refs.modalGroupMembers.classList.add('hidden');
+    appUI.openGroupMembersId = null;
 }
 
 function getIconClass(ext) {
@@ -826,6 +898,7 @@ function renderChat(userId) {
         refs.chatAvatar.className = 'avatar avatar-md group-avatar';
         refs.chatAvatar.innerHTML = GROUP_ICON_SVG;
         setPresence(refs.chatStatus, `${group.members.length} members`, false);
+        refs.btnGroupMembers.classList.remove('hidden');
         refs.btnLeaveGroup.classList.remove('hidden');
     } else {
         user = appUI.users.find((item) => item.id === userId);
@@ -841,6 +914,7 @@ function renderChat(userId) {
         refs.chatAvatar.className = 'avatar avatar-md avatar-photo';
         renderAvatarElement(refs.chatAvatar, user.displayName || user.name, user.avatarUrl);
         setPresence(refs.chatStatus, user.online ? 'Online' : `Last seen ${formatRelativeTime(user.lastSeen)}`, !!user.online);
+        refs.btnGroupMembers.classList.add('hidden');
         refs.btnLeaveGroup.classList.add('hidden');
     }
 
@@ -967,7 +1041,7 @@ appUI.handleIncomingMessage = (senderId, msgObj) => {
 function syncUserSource(rawUsers) {
     appUI.users = (rawUsers || []).filter((user) => user.id !== appUI.myId);
 
-    if (appUI.activeChat && !appUI.users.some((user) => user.id === appUI.activeChat)) {
+    if (appUI.activeChat && !isGroupChat(appUI.activeChat) && !appUI.users.some((user) => user.id === appUI.activeChat)) {
         appUI.activeChat = null;
     }
 
@@ -1853,7 +1927,9 @@ function setupEvents() {
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (!refs.modalGroupCreate.classList.contains('hidden')) {
+            if (!refs.modalGroupMembers.classList.contains('hidden')) {
+                closeGroupMembersModal();
+            } else if (!refs.modalGroupCreate.classList.contains('hidden')) {
                 refs.modalGroupCreate.classList.add('hidden');
             } else if (!refs.modalPrompt.classList.contains('hidden')) {
                 refs.promptCancel.click();
@@ -1998,6 +2074,17 @@ function setupEvents() {
         delete appUI.messages[appUI.activeChat];
         closeActiveChat();
         fetchGroups();
+    });
+
+    refs.btnGroupMembers.addEventListener('click', () => {
+        if (!isGroupChat(appUI.activeChat)) return;
+        openGroupMembersModal(groupIdFromChat(appUI.activeChat));
+    });
+
+    refs.groupMembersClose.addEventListener('click', closeGroupMembersModal);
+
+    refs.modalGroupMembers.addEventListener('click', (event) => {
+        if (event.target === refs.modalGroupMembers) closeGroupMembersModal();
     });
 
     refs.btnSharedFolder.addEventListener('click', () => {
