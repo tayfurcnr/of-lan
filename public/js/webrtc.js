@@ -61,3 +61,29 @@ window.sendMessageToPeer = function sendMessageToPeer(targetAccountId, messageOb
         });
     });
 };
+
+window.sendGroupMessage = function sendGroupMessage(groupId, messageObj) {
+    return new Promise((resolve) => {
+        if (!socket || !socket.connected) {
+            resolve({ ok: false, queued: false });
+            return;
+        }
+
+        socket.emit('group_message', {
+            group: groupId,
+            message: messageObj
+        }, (ack) => {
+            if (!ack || !ack.ok) {
+                resolve({ ok: false, error: ack && ack.error });
+                return;
+            }
+
+            resolve({
+                ok: true,
+                messageId: ack.messageId,
+                delivered: true,
+                queued: false
+            });
+        });
+    });
+};

@@ -2,6 +2,7 @@ const AUTH_TOKEN_KEY = 'officelan_auth_token';
 
 const appUI = {
     users: [],
+    groups: [],
     activeChat: null,
     messages: {},
     unreadCounts: {},
@@ -43,6 +44,16 @@ const refs = {
     settingsAvatarPreview: document.getElementById('settings-avatar-preview'),
     contactsList: document.getElementById('contacts-list'),
     lanUsersList: document.getElementById('lan-users-list'),
+    groupsList: document.getElementById('groups-list'),
+    btnNewGroup: document.getElementById('btn-new-group'),
+    btnLeaveGroup: document.getElementById('btn-leave-group'),
+    modalGroupCreate: document.getElementById('modal-group-create'),
+    groupCreateForm: document.getElementById('group-create-form'),
+    groupNameInput: document.getElementById('group-name-input'),
+    groupMemberList: document.getElementById('group-member-list'),
+    groupCreateError: document.getElementById('group-create-error'),
+    groupCreateConfirm: document.getElementById('group-create-confirm'),
+    groupCreateCancel: document.getElementById('group-create-cancel'),
     onlineCount: document.getElementById('online-count'),
     searchUsers: document.getElementById('search-users'),
     btnUsersRefresh: document.getElementById('btn-users-refresh'),
@@ -529,6 +540,14 @@ function getMessageSeed(userId) {
     return appUI.messages[userId];
 }
 
+function isGroupChat(chatId) {
+    return typeof chatId === 'string' && chatId.startsWith('group:');
+}
+
+function groupIdFromChat(chatId) {
+    return chatId.slice('group:'.length);
+}
+
 function renderProfile() {
     const account = appUI.account;
     if (!account) return;
@@ -579,12 +598,45 @@ function renderUsers() {
     refs.lanUsersList.innerHTML = makeUserList(offlineUsers);
     refs.onlineCount.textContent = String(appUI.users.filter((user) => user.online).length);
 
-    document.querySelectorAll('.person-row').forEach((row) => {
+    [...refs.contactsList.querySelectorAll('.person-row'), ...refs.lanUsersList.querySelectorAll('.person-row')].forEach((row) => {
         row.addEventListener('click', () => {
             const userId = row.getAttribute('data-user-id');
             selectUser(userId);
         });
     });
+}
+
+const GROUP_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M17 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 5 18.5V20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="9.5" cy="8" r="3" stroke="currentColor" stroke-width="2"/><path d="M16 8.2a3 3 0 0 1 0 5.8M19.5 20v-1.5a3.3 3.3 0 0 0-2.2-3.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+function renderGroups() {
+    refs.groupsList.innerHTML = appUI.groups.map((group) => {
+        const active = appUI.activeChat === `group:${group.id}` ? 'active' : '';
+        return `
+            <li class="person-row ${active}" data-group-id="${escapeHTML(group.id)}">
+                <div class="avatar avatar-sm group-avatar">${GROUP_ICON_SVG}</div>
+                <div class="person-copy">
+                    <div class="person-name">${escapeHTML(group.name)}</div>
+                    <div class="person-meta">${group.members.length} members</div>
+                </div>
+            </li>
+        `;
+    }).join('');
+
+    refs.groupsList.querySelectorAll('.person-row').forEach((row) => {
+        row.addEventListener('click', () => {
+            selectGroup(row.getAttribute('data-group-id'));
+        });
+    });
+}
+
+async function fetchGroups() {
+    try {
+        const payload = await apiFetch('/api/groups');
+        appUI.groups = payload.groups || [];
+    } catch (error) {
+        appUI.groups = [];
+    }
+    renderGroups();
 }
 
 function getIconClass(ext) {
@@ -648,13 +700,16 @@ function renderMessage(message, peerUser) {
     if (message.type === 'file') {
         const avatarName = message.sentByMe
             ? (appUI.account ? appUI.account.displayName : 'Me')
-            : (peerUser ? peerUser.displayName || peerUser.name : 'User');
+            : (message.senderName || (peerUser ? peerUser.displayName || peerUser.name : 'User'));
         const avatarUrl = message.sentByMe
             ? (appUI.account ? appUI.account.avatarUrl : '')
-            : (peerUser ? peerUser.avatarUrl : '');
+            : (message.senderName ? message.senderAvatarUrl || '' : (peerUser ? peerUser.avatarUrl : ''));
         const avatarStyle = message.sentByMe
             ? 'background: linear-gradient(180deg, #8650f3, #5e2fc4);'
             : 'background: linear-gradient(180deg, #8b5cf6, #6d45db);';
+        const senderLabel = !message.sentByMe && message.senderName
+            ? `<div class="message-sender-name">${escapeHTML(message.senderName)}</div>`
+            : '';
 
         if (message.uploading) {
             const percent = Math.max(0, Math.min(100, Math.round(message.percent || 0)));
@@ -688,6 +743,7 @@ function renderMessage(message, peerUser) {
                 <div class="message-row ${side}">
                     ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', avatarStyle)}
                     <div class="chat-image-card">
+                        ${senderLabel}
                         <img class="chat-image" src="${escapeHTML(message.content)}" alt="${escapeHTML(message.name || 'image')}" loading="lazy" onclick="openImagePreview('${escapeHTML(message.content)}', '${escapeHTML(message.name || '')}')">
                         <div class="message-meta chat-image-meta">${meta}</div>
                     </div>
@@ -699,6 +755,7 @@ function renderMessage(message, peerUser) {
             <div class="message-row ${side}">
                 ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', avatarStyle)}
                 <div class="file-card ${message.sentByMe ? 'sent' : ''}">
+                    ${senderLabel}
                     <div class="file-card-top">
                         <div class="file-icon ${getIconClass(message.icon || '')}">${getInlineFileIcon(message.icon || 'file')}</div>
                         <div class="file-copy">
@@ -717,16 +774,21 @@ function renderMessage(message, peerUser) {
 
     const avatarName = message.sentByMe
         ? (appUI.account ? appUI.account.displayName : 'Me')
-        : (peerUser ? peerUser.displayName || peerUser.name : 'User');
+        : (message.senderName || (peerUser ? peerUser.displayName || peerUser.name : 'User'));
+
+    const senderLabel = !message.sentByMe && message.senderName
+        ? `<div class="message-sender-name">${escapeHTML(message.senderName)}</div>`
+        : '';
 
     const avatarUrl = message.sentByMe
         ? (appUI.account ? appUI.account.avatarUrl : '')
-        : (peerUser ? peerUser.avatarUrl : '');
+        : (message.senderName ? message.senderAvatarUrl || '' : (peerUser ? peerUser.avatarUrl : ''));
 
     return `
         <div class="message-row ${side}">
             ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', message.sentByMe ? 'background: linear-gradient(180deg, #8650f3, #5e2fc4);' : 'background: linear-gradient(180deg, #8b5cf6, #6d45db);')}
             <div class="message-stack">
+                ${senderLabel}
                 <div class="message-bubble">${escapeHTML(message.content)}</div>
                 <div class="message-meta">${meta}</div>
             </div>
@@ -749,18 +811,38 @@ function renderChat(userId) {
         return;
     }
 
-    const user = appUI.users.find((item) => item.id === userId);
-    if (!user) {
-        refs.noChatSelected.classList.remove('hidden');
-        refs.chatContainer.classList.add('hidden');
-        return;
-    }
+    let user = null;
+    if (isGroupChat(userId)) {
+        const group = appUI.groups.find((item) => item.id === groupIdFromChat(userId));
+        if (!group) {
+            refs.noChatSelected.classList.remove('hidden');
+            refs.chatContainer.classList.add('hidden');
+            return;
+        }
 
-    refs.noChatSelected.classList.add('hidden');
-    refs.chatContainer.classList.remove('hidden');
-    refs.chatUserName.textContent = user.displayName || user.name;
-    renderAvatarElement(refs.chatAvatar, user.displayName || user.name, user.avatarUrl);
-    setPresence(refs.chatStatus, user.online ? 'Online' : `Last seen ${formatRelativeTime(user.lastSeen)}`, !!user.online);
+        refs.noChatSelected.classList.add('hidden');
+        refs.chatContainer.classList.remove('hidden');
+        refs.chatUserName.textContent = group.name;
+        refs.chatAvatar.className = 'avatar avatar-md group-avatar';
+        refs.chatAvatar.innerHTML = GROUP_ICON_SVG;
+        setPresence(refs.chatStatus, `${group.members.length} members`, false);
+        refs.btnLeaveGroup.classList.remove('hidden');
+    } else {
+        user = appUI.users.find((item) => item.id === userId);
+        if (!user) {
+            refs.noChatSelected.classList.remove('hidden');
+            refs.chatContainer.classList.add('hidden');
+            return;
+        }
+
+        refs.noChatSelected.classList.add('hidden');
+        refs.chatContainer.classList.remove('hidden');
+        refs.chatUserName.textContent = user.displayName || user.name;
+        refs.chatAvatar.className = 'avatar avatar-md avatar-photo';
+        renderAvatarElement(refs.chatAvatar, user.displayName || user.name, user.avatarUrl);
+        setPresence(refs.chatStatus, user.online ? 'Online' : `Last seen ${formatRelativeTime(user.lastSeen)}`, !!user.online);
+        refs.btnLeaveGroup.classList.add('hidden');
+    }
 
     const messages = getMessageSeed(userId);
     const html = ['<div class="day-pill">Today</div>'];
@@ -794,18 +876,41 @@ async function loadChatHistory(userId) {
     }
 }
 
+async function loadGroupChatHistory(groupId) {
+    const chatId = `group:${groupId}`;
+    const pendingUploads = (appUI.messages[chatId] || []).filter((message) => message.uploading);
+
+    try {
+        const payload = await apiFetch(`/api/groups/${groupId}/messages`);
+        appUI.messages[chatId] = [...(payload.messages || []), ...pendingUploads];
+    } catch (error) {
+        if (!appUI.messages[chatId]) {
+            appUI.messages[chatId] = pendingUploads;
+        }
+    }
+}
+
 function selectUser(userId) {
     appUI.activeChat = userId;
     appUI.unreadCounts[userId] = 0;
     renderUsers();
+    renderGroups();
     markChatRead(userId);
     loadChatHistory(userId).then(() => renderChat(userId));
+}
+
+function selectGroup(groupId) {
+    appUI.activeChat = `group:${groupId}`;
+    renderUsers();
+    renderGroups();
+    loadGroupChatHistory(groupId).then(() => renderChat(appUI.activeChat));
 }
 
 function closeActiveChat() {
     if (appUI.activeChat) {
         appUI.activeChat = null;
         renderUsers();
+        renderGroups();
         renderChat(null);
     }
 }
@@ -815,7 +920,9 @@ async function sendChatMessage() {
     if (!text || !appUI.activeChat) return;
 
     const message = { type: 'text', content: text, time: Date.now(), sentByMe: true };
-    const result = await window.sendMessageToPeer(appUI.activeChat, message);
+    const result = isGroupChat(appUI.activeChat)
+        ? await window.sendGroupMessage(groupIdFromChat(appUI.activeChat), message)
+        : await window.sendMessageToPeer(appUI.activeChat, message);
 
     if (!result || (!result.ok && !result.queued)) return;
 
@@ -915,7 +1022,7 @@ function renderFiles(files) {
 
     if (!rows.length) {
         refs.folderFilesList.innerHTML = `
-            <div class="empty-state" style="min-height: 260px;">
+            <div class="empty-state">
                 <div class="empty-badge">
                     <svg viewBox="0 0 24 24" fill="none">
                         <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l2 2H18a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5v-10Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -1250,6 +1357,7 @@ async function loadUnreadCounts() {
 }
 
 function markChatRead(userId) {
+    if (isGroupChat(userId)) return;
     apiFetch(`/api/messages/${userId}/read`, { method: 'POST' }).catch(() => {});
 }
 
@@ -1261,6 +1369,7 @@ async function openAuthenticatedApp(account) {
     renderProfile();
     fetchFiles();
     loadUnreadCounts();
+    fetchGroups();
 
     const socket = window.connectSocket ? window.connectSocket(getAuthToken()) : null;
     if (!socket) return;
@@ -1286,10 +1395,47 @@ async function openAuthenticatedApp(account) {
     });
 
     socket.on('update_users', syncUserSource);
+    socket.on('groups_updated', () => fetchGroups());
     socket.on('session_state', handleSessionState);
     socket.on('direct_message', (payload) => {
         if (!payload || !payload.sender || !payload.message) return;
         appUI.handleIncomingMessage(payload.sender, payload.message);
+    });
+
+    socket.on('group_message', (payload) => {
+        if (!payload || !payload.groupId || !payload.message) return;
+
+        const chatId = `group:${payload.groupId}`;
+        const seed = getMessageSeed(chatId);
+        if (payload.message.id && seed.some((item) => item.id === payload.message.id)) return;
+
+        const sentByMe = payload.senderId === appUI.myId;
+        seed.push({
+            ...payload.message,
+            senderName: payload.senderName,
+            senderAvatarUrl: payload.senderAvatarUrl,
+            sentByMe,
+            delivered: true
+        });
+
+        if (!sentByMe) {
+            playIncomingMessageSound();
+        }
+
+        const isActivelyViewing = appUI.activeChat === chatId && !document.hidden && document.hasFocus();
+        if (appUI.activeChat === chatId) {
+            renderChat(chatId);
+        }
+
+        if (!sentByMe && !isActivelyViewing) {
+            const group = appUI.groups.find((item) => item.id === payload.groupId);
+            showAppToast({
+                avatarUrl: '',
+                name: `${payload.senderName || 'Someone'} · ${group ? group.name : 'Group'}`,
+                body: payload.message.type === 'text' ? String(payload.message.content || '') : 'Shared a file.',
+                onClick: () => selectGroup(payload.groupId)
+            });
+        }
     });
 
     socket.on('nudge', (payload) => {
@@ -1326,6 +1472,48 @@ async function openAuthenticatedApp(account) {
                 notification.onclick = () => {
                     window.focus();
                     selectUser(payload.from);
+                    notification.close();
+                };
+            }
+        }
+    });
+
+    socket.on('group_nudge', (payload) => {
+        if (!payload || !payload.groupId || !payload.from) return;
+
+        const chatId = `group:${payload.groupId}`;
+        const group = appUI.groups.find((item) => item.id === payload.groupId);
+
+        shakeWindow();
+        playNudgeSound();
+
+        const seed = getMessageSeed(chatId);
+        seed.push({ type: 'nudge', text: `${payload.fromName || 'User'} sent a nudge`, time: Date.now() });
+
+        const isActivelyViewing = appUI.activeChat === chatId && !document.hidden && document.hasFocus();
+        if (appUI.activeChat === chatId) {
+            renderChat(chatId);
+        }
+
+        if (!isActivelyViewing) {
+            showAppToast({
+                avatarUrl: '',
+                name: `${payload.fromName || 'User'} · ${group ? group.name : 'Group'}`,
+                body: 'sent a nudge ⚡',
+                onClick: () => selectGroup(payload.groupId)
+            });
+
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const notification = new Notification(payload.fromName || 'User', {
+                    body: `sent a nudge in ${group ? group.name : 'a group'} ⚡`,
+                    icon: '/logo-white.png',
+                    badge: '/logo-white.png',
+                    tag: `group-nudge-${payload.groupId}`,
+                    renotify: true
+                });
+                notification.onclick = () => {
+                    window.focus();
+                    selectGroup(payload.groupId);
                     notification.close();
                 };
             }
@@ -1502,7 +1690,9 @@ async function uploadFileToChat(file) {
         sentByMe: true
     };
 
-    const result = await window.sendMessageToPeer(chatId, message);
+    const result = isGroupChat(chatId)
+        ? await window.sendGroupMessage(groupIdFromChat(chatId), message)
+        : await window.sendMessageToPeer(chatId, message);
     const seed = getMessageSeed(chatId);
     const index = seed.indexOf(placeholder);
 
@@ -1622,7 +1812,11 @@ function setupEvents() {
             const chatId = appUI.activeChat;
             if (!socket || !chatId || refs.btnNudge.disabled) return;
 
-            socket.emit('nudge', { target: chatId }, (result) => {
+            const isGroup = isGroupChat(chatId);
+            const eventName = isGroup ? 'group_nudge' : 'nudge';
+            const eventPayload = isGroup ? { group: groupIdFromChat(chatId) } : { target: chatId };
+
+            socket.emit(eventName, eventPayload, (result) => {
                 if (!result || !result.ok) {
                     if (result && result.retryAfterMs) {
                         refs.btnNudge.disabled = true;
@@ -1659,7 +1853,9 @@ function setupEvents() {
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (!refs.modalPrompt.classList.contains('hidden')) {
+            if (!refs.modalGroupCreate.classList.contains('hidden')) {
+                refs.modalGroupCreate.classList.add('hidden');
+            } else if (!refs.modalPrompt.classList.contains('hidden')) {
                 refs.promptCancel.click();
             } else if (!refs.modalImagePreview.classList.contains('hidden')) {
                 closeImagePreview();
@@ -1731,6 +1927,77 @@ function setupEvents() {
         for (const file of files) {
             await uploadFileToChat(file);
         }
+    });
+
+    refs.btnNewGroup.addEventListener('click', () => {
+        refs.groupNameInput.value = '';
+        refs.groupCreateError.classList.add('hidden');
+        refs.groupCreateError.textContent = '';
+        refs.groupMemberList.innerHTML = appUI.users.map((user) => `
+            <label class="group-member-row">
+                <input type="checkbox" value="${escapeHTML(user.id)}">
+                <span>${escapeHTML(user.displayName || user.name)}</span>
+            </label>
+        `).join('') || '<div class="field-label">No other users yet.</div>';
+        refs.modalGroupCreate.classList.remove('hidden');
+        requestAnimationFrame(() => refs.groupNameInput.focus());
+    });
+
+    refs.groupCreateCancel.addEventListener('click', () => {
+        refs.modalGroupCreate.classList.add('hidden');
+    });
+
+    refs.modalGroupCreate.addEventListener('click', (event) => {
+        if (event.target === refs.modalGroupCreate) refs.modalGroupCreate.classList.add('hidden');
+    });
+
+    refs.groupCreateForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const name = refs.groupNameInput.value.trim();
+        const memberIds = Array.from(refs.groupMemberList.querySelectorAll('input[type="checkbox"]:checked'))
+            .map((input) => input.value);
+
+        refs.groupCreateError.classList.add('hidden');
+
+        if (!name) {
+            refs.groupCreateError.textContent = 'Group name is required.';
+            refs.groupCreateError.classList.remove('hidden');
+            return;
+        }
+
+        refs.groupCreateConfirm.disabled = true;
+        try {
+            await apiFetch('/api/groups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, memberIds })
+            });
+            refs.modalGroupCreate.classList.add('hidden');
+            await fetchGroups();
+        } catch (error) {
+            refs.groupCreateError.textContent = error.message || 'Could not create group.';
+            refs.groupCreateError.classList.remove('hidden');
+        } finally {
+            refs.groupCreateConfirm.disabled = false;
+        }
+    });
+
+    refs.btnLeaveGroup.addEventListener('click', async () => {
+        if (!isGroupChat(appUI.activeChat)) return;
+        const groupId = groupIdFromChat(appUI.activeChat);
+        const group = appUI.groups.find((item) => item.id === groupId);
+        if (!confirm(`Leave "${group ? group.name : 'this group'}"?`)) return;
+
+        try {
+            await apiFetch(`/api/groups/${groupId}/leave`, { method: 'POST' });
+        } catch (error) {
+            alert('Could not leave group: ' + error.message);
+            return;
+        }
+
+        delete appUI.messages[appUI.activeChat];
+        closeActiveChat();
+        fetchGroups();
     });
 
     refs.btnSharedFolder.addEventListener('click', () => {

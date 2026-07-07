@@ -187,6 +187,17 @@
 
                 <div class="section-scroll">
                     <div class="section-head">
+                        <span>GROUPS</span>
+                        <button class="section-action" id="btn-new-group" aria-label="Yeni grup">
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <path d="M12 5v14m-7-7h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <ul id="groups-list" class="people-list"></ul>
+
+                    <div class="section-head">
                         <span>USERS (<span id="online-count">0</span> online)</span>
                         <button class="section-action" id="btn-users-refresh" aria-label="Kullanicilari yenile">
                             <svg viewBox="0 0 24 24" fill="none">
@@ -260,6 +271,12 @@
                             </div>
                         </div>
                         <div class="chat-tools">
+                            <button class="icon-button hidden" id="btn-leave-group" aria-label="Gruptan ayril" title="Gruptan ayril">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
                             <button class="icon-button" id="btn-nudge" aria-label="Nudge gonder" title="Nudge gonder">
                                 <svg viewBox="0 0 24 24" fill="none">
                                     <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -429,6 +446,32 @@
                     <input type="text" id="prompt-input" class="text-field" autocomplete="off" spellcheck="false">
                     <div class="prompt-error hidden" id="prompt-error"></div>
                     <button type="submit" class="primary-button block-button" id="prompt-confirm">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-group-create" class="modal-overlay hidden">
+        <div class="modal-card">
+            <form id="group-create-form">
+                <div class="modal-header">
+                    <div>
+                        <div class="modal-kicker">New</div>
+                        <h2>Create Group</h2>
+                    </div>
+                    <button type="button" class="icon-button" id="group-create-cancel" aria-label="Kapat">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <label class="field-label" for="group-name-input">Group name</label>
+                    <input type="text" id="group-name-input" class="text-field" autocomplete="off" spellcheck="false">
+                    <label class="field-label">Members</label>
+                    <div class="group-member-list" id="group-member-list"></div>
+                    <div class="prompt-error hidden" id="group-create-error"></div>
+                    <button type="submit" class="primary-button block-button" id="group-create-confirm">Create Group</button>
                 </div>
             </form>
         </div>

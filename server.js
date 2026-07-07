@@ -16,10 +16,16 @@ const {
     getPendingMessages,
     userExists
 } = require('./lib/message-store');
+const {
+    isGroupMember,
+    getGroupMemberIds,
+    saveGroupMessage
+} = require('./lib/group-store');
 const folderRoutes = require('./routes/folder');
 const { authRouter } = require('./routes/auth');
 const { adminRouter } = require('./routes/admin');
 const { messagesRouter } = require('./routes/messages');
+const { groupsRouter, setGroupNotifier } = require('./routes/groups');
 
 let bonjour;
 let bonjourService = null;
@@ -48,6 +54,7 @@ app.use('/api/folder', folderRoutes);
 app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/messages', messagesRouter);
+app.use('/api/groups', groupsRouter);
 
 function advertiseService(port) {
     if (!bonjour) return null;
@@ -98,6 +105,16 @@ app.get('/admin', (req, res) => {
 const activeSocketsByAccount = new Map();
 const activeSocketsByDevice = new Map();
 const socketSessions = new Map();
+
+setGroupNotifier((memberIds) => {
+    for (const memberId of memberIds) {
+        const sockets = activeSocketsByAccount.get(memberId);
+        if (!sockets) continue;
+        for (const socketId of sockets) {
+            io.to(socketId).emit('groups_updated');
+        }
+    }
+});
 
 // Token bucket: lets a few nudges through instantly, then throttles.
 const nudgeBuckets = new Map();
@@ -357,6 +374,70 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('group_message', (data = {}, ack) => {
+        const freshSession = authenticateToken(socket.data.token);
+        if (!freshSession) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'Session expired.' });
+            socket.disconnect(true);
+            return;
+        }
+
+        const groupId = String(data.group || '').trim();
+        const incomingMessage = data.message || {};
+        const messageType = String(incomingMessage.type || 'text').trim();
+        const messageContent = String(incomingMessage.content || '').trim();
+
+        if (!groupId || !isGroupMember(groupId, accountId)) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'Group not found.' });
+            return;
+        }
+
+        if (messageType !== 'text' && messageType !== 'file' || !messageContent) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'Invalid message.' });
+            return;
+        }
+
+        const saved = saveGroupMessage({
+            groupId,
+            senderId: accountId,
+            type: messageType,
+            content: messageContent,
+            name: incomingMessage.name,
+            size: incomingMessage.size,
+            icon: incomingMessage.icon,
+            clientTime: incomingMessage.time
+        });
+
+        const payload = {
+            groupId,
+            senderId: accountId,
+            senderName: freshSession.account.displayName,
+            senderAvatarUrl: freshSession.account.avatarUrl || '',
+            message: {
+                id: saved.id,
+                type: saved.type,
+                content: saved.content,
+                name: saved.name,
+                size: saved.size,
+                icon: saved.icon,
+                time: saved.time
+            }
+        };
+
+        for (const memberId of getGroupMemberIds(groupId)) {
+            if (memberId === accountId) continue;
+            const memberSockets = activeSocketsByAccount.get(memberId);
+            if (!memberSockets) continue;
+            for (const memberSocketId of memberSockets) {
+                io.to(memberSocketId).emit('group_message', payload);
+            }
+        }
+
+        if (typeof ack === 'function') {
+            ack({ ok: true, messageId: saved.id });
+        }
+    });
+
     socket.on('nudge', (data = {}, ack) => {
         const freshSession = authenticateToken(socket.data.token);
         if (!freshSession) {
@@ -394,6 +475,47 @@ io.on('connection', (socket) => {
 
         if (typeof ack === 'function') {
             ack({ ok: true, delivered: isOnline });
+        }
+    });
+
+    socket.on('group_nudge', (data = {}, ack) => {
+        const freshSession = authenticateToken(socket.data.token);
+        if (!freshSession) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'Session expired.' });
+            socket.disconnect(true);
+            return;
+        }
+
+        const groupId = String(data.group || '').trim();
+        if (!groupId || !isGroupMember(groupId, accountId)) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'Group not found.' });
+            return;
+        }
+
+        const bucketKey = `group:${groupId}:${accountId}`;
+        const throttle = tryConsumeNudge(bucketKey);
+        if (!throttle.allowed) {
+            if (typeof ack === 'function') {
+                ack({ ok: false, error: 'Please wait before nudging again.', retryAfterMs: throttle.retryAfterMs });
+            }
+            return;
+        }
+
+        for (const memberId of getGroupMemberIds(groupId)) {
+            if (memberId === accountId) continue;
+            const memberSockets = activeSocketsByAccount.get(memberId);
+            if (!memberSockets) continue;
+            for (const memberSocketId of memberSockets) {
+                io.to(memberSocketId).emit('group_nudge', {
+                    groupId,
+                    from: accountId,
+                    fromName: freshSession.account.displayName
+                });
+            }
+        }
+
+        if (typeof ack === 'function') {
+            ack({ ok: true });
         }
     });
 

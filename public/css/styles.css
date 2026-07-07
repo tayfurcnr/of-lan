@@ -451,6 +451,55 @@ svg {
     pointer-events: none;
 }
 
+.group-member-list {
+    max-height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 6px;
+}
+
+.group-member-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.group-member-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.group-member-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent-2);
+    flex-shrink: 0;
+}
+
+.group-member-row span {
+    font-size: 14px;
+    color: var(--text);
+}
+
+.group-avatar {
+    background: linear-gradient(180deg, #7d47f1, #4c2196);
+    display: grid;
+    place-items: center;
+    color: white;
+}
+
+.group-avatar svg {
+    width: 55%;
+    height: 55%;
+}
+
 .person-copy {
     min-width: 0;
     flex: 1;
@@ -807,6 +856,13 @@ dotlottie-wc:not(:defined) {
     flex-direction: column;
     gap: 5px;
     min-width: 0;
+}
+
+.message-sender-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent-3);
+    margin-bottom: 2px;
 }
 
 .message-bubble {
@@ -1298,6 +1354,14 @@ dotlottie-wc:not(:defined) {
     min-height: 0;
     overflow: auto;
     padding: 2px 8px 8px 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.files-list .empty-state {
+    flex: 1;
+    height: auto;
+    user-select: none;
 }
 
 .file-row {
@@ -1377,6 +1441,15 @@ dotlottie-wc:not(:defined) {
     grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
     gap: 12px;
     align-content: start;
+}
+
+.files-table.grid-mode .files-list .empty-state {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 260px;
 }
 
 .files-table.grid-mode .file-row {
