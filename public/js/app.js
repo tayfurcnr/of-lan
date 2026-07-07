@@ -53,6 +53,7 @@ const refs = {
     chatStatus: document.getElementById('chat-status'),
     chatMessages: document.getElementById('chat-messages'),
     btnCloseChat: document.getElementById('btn-close-chat'),
+    btnNudge: document.getElementById('btn-nudge'),
     messageInput: document.getElementById('message-input'),
     btnSend: document.getElementById('btn-send'),
     btnAttach: document.getElementById('btn-attach'),
@@ -325,6 +326,20 @@ function playIncomingMessageSound() {
     oscillator.stop(now + 0.25);
 }
 
+function playNudgeSound() {
+    const audio = new Audio('/sounds/nudge.mp3');
+    audio.volume = 0.6;
+    audio.play().catch(() => {});
+}
+
+function shakeWindow() {
+    refs.app.classList.remove('shake');
+    // force reflow so the animation restarts if a nudge arrives again quickly
+    void refs.app.offsetWidth;
+    refs.app.classList.add('shake');
+    setTimeout(() => refs.app.classList.remove('shake'), 500);
+}
+
 function requestNotificationPermission() {
     if (!('Notification' in window) || notificationPermissionRequested) return;
     if (Notification.permission !== 'default') return;
@@ -546,6 +561,10 @@ function getInlineFileIcon(kind) {
 }
 
 function renderMessage(message, peerUser) {
+    if (message.type === 'nudge') {
+        return `<div class="day-pill nudge-pill">⚡ ${escapeHTML(message.text || 'Nudge')}</div>`;
+    }
+
     const time = formatTime(message.time || Date.now());
     const side = message.sentByMe ? 'sent' : 'received';
     const tickIcon = message.sentByMe
@@ -1131,6 +1150,20 @@ async function openAuthenticatedApp(account) {
         appUI.handleIncomingMessage(payload.sender, payload.message);
     });
 
+    socket.on('nudge', (payload) => {
+        if (!payload || !payload.from) return;
+
+        shakeWindow();
+        playNudgeSound();
+
+        const seed = getMessageSeed(payload.from);
+        seed.push({ type: 'nudge', text: `${payload.fromName || 'User'} sent a nudge`, time: Date.now() });
+
+        if (appUI.activeChat === payload.from) {
+            renderChat(payload.from);
+        }
+    });
+
     socket.on('message_delivered', (payload) => {
         const messageIds = payload && payload.messageIds;
         if (!Array.isArray(messageIds) || !messageIds.length) return;
@@ -1327,6 +1360,28 @@ function setupEvents() {
 
     if (refs.btnCloseChat) {
         refs.btnCloseChat.addEventListener('click', closeActiveChat);
+    }
+
+    if (refs.btnNudge) {
+        refs.btnNudge.addEventListener('click', () => {
+            const socket = getSocketInstance();
+            const chatId = appUI.activeChat;
+            if (!socket || !chatId || refs.btnNudge.disabled) return;
+
+            socket.emit('nudge', { target: chatId }, (result) => {
+                if (!result || !result.ok) {
+                    if (result && result.retryAfterMs) {
+                        refs.btnNudge.disabled = true;
+                        setTimeout(() => { refs.btnNudge.disabled = false; }, result.retryAfterMs);
+                    }
+                    return;
+                }
+
+                playNudgeSound();
+                getMessageSeed(chatId).push({ type: 'nudge', text: 'You sent a nudge', time: Date.now() });
+                if (appUI.activeChat === chatId) renderChat(chatId);
+            });
+        });
     }
 
     window.addEventListener('resize', () => {

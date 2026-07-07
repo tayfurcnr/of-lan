@@ -99,6 +99,33 @@ const activeSocketsByAccount = new Map();
 const activeSocketsByDevice = new Map();
 const socketSessions = new Map();
 
+// Token bucket: lets a few nudges through instantly, then throttles.
+const nudgeBuckets = new Map();
+const NUDGE_BURST_CAPACITY = 3;
+const NUDGE_REFILL_MS = 4000;
+
+function tryConsumeNudge(key) {
+    const now = Date.now();
+    let bucket = nudgeBuckets.get(key);
+    if (!bucket) {
+        bucket = { tokens: NUDGE_BURST_CAPACITY, lastRefill: now };
+        nudgeBuckets.set(key, bucket);
+    } else {
+        const regen = Math.floor((now - bucket.lastRefill) / NUDGE_REFILL_MS);
+        if (regen > 0) {
+            bucket.tokens = Math.min(NUDGE_BURST_CAPACITY, bucket.tokens + regen);
+            bucket.lastRefill += regen * NUDGE_REFILL_MS;
+        }
+    }
+
+    if (bucket.tokens < 1) {
+        return { allowed: false, retryAfterMs: NUDGE_REFILL_MS - (now - bucket.lastRefill) };
+    }
+
+    bucket.tokens -= 1;
+    return { allowed: true };
+}
+
 function getClientIpFromSocket(socket) {
     const forwarded = socket.handshake.headers['x-forwarded-for'];
     return forwarded || socket.handshake.address || '';
@@ -327,6 +354,46 @@ io.on('connection', (socket) => {
                 delivered: isOnline,
                 queued: !isOnline
             });
+        }
+    });
+
+    socket.on('nudge', (data = {}, ack) => {
+        const freshSession = authenticateToken(socket.data.token);
+        if (!freshSession) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'Session expired.' });
+            socket.disconnect(true);
+            return;
+        }
+
+        const targetAccountId = String(data.target || '').trim();
+        if (!targetAccountId || targetAccountId === accountId || !userExists(targetAccountId)) {
+            if (typeof ack === 'function') ack({ ok: false, error: 'Invalid recipient.' });
+            return;
+        }
+
+        const bucketKey = `${accountId}:${targetAccountId}`;
+        const throttle = tryConsumeNudge(bucketKey);
+        if (!throttle.allowed) {
+            if (typeof ack === 'function') {
+                ack({ ok: false, error: 'Please wait before nudging again.', retryAfterMs: throttle.retryAfterMs });
+            }
+            return;
+        }
+
+        const targetSockets = activeSocketsByAccount.get(targetAccountId);
+        const isOnline = !!(targetSockets && targetSockets.size);
+
+        if (isOnline) {
+            for (const targetSocketId of targetSockets) {
+                io.to(targetSocketId).emit('nudge', {
+                    from: accountId,
+                    fromName: freshSession.account.displayName
+                });
+            }
+        }
+
+        if (typeof ack === 'function') {
+            ack({ ok: true, delivered: isOnline });
         }
     });
 

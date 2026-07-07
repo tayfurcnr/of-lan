@@ -742,6 +742,11 @@ dotlottie-wc:not(:defined) {
     place-items: center;
 }
 
+.icon-button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
 .chat-history {
     flex: 1;
     min-height: 0;
@@ -763,6 +768,23 @@ dotlottie-wc:not(:defined) {
     color: #d4daf1;
     border: 1px solid rgba(255, 255, 255, 0.04);
     font-size: 13px;
+}
+
+.nudge-pill {
+    background: rgba(241, 194, 77, 0.1);
+    color: #f1c24d;
+    border-color: rgba(241, 194, 77, 0.18);
+}
+
+.shake {
+    animation: window-shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes window-shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+    40%, 60% { transform: translate3d(6px, 0, 0); }
 }
 
 .message-row {
