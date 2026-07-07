@@ -2002,3 +2002,40 @@ dotlottie-wc:not(:defined) {
     flex-direction: column;
     padding: 0;
 }
+
+@media (max-width: 768px) {
+    .workspace {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        padding: 0;
+        gap: 0;
+    }
+
+    .sidebar-left {
+        width: 100%;
+        height: 100%;
+        flex: 1 1 auto;
+        border-radius: 0;
+    }
+
+    .chat-panel {
+        display: none;
+        width: 100%;
+        height: 100%;
+        flex: 1 1 auto;
+        border-radius: 0;
+    }
+
+    #app.mobile-chat-active .sidebar-left {
+        display: none;
+    }
+
+    #app.mobile-chat-active .chat-panel {
+        display: flex;
+    }
+
+    #app.mobile-chat-active .chat-container {
+        height: 100%;
+    }
+}

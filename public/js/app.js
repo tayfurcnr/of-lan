@@ -483,6 +483,7 @@ function renderMessage(message, peerUser) {
 
 function renderChat(userId) {
     const isMobile = window.innerWidth <= 768;
+    refs.app.classList.toggle('mobile-chat-active', isMobile && !!userId);
 
     if (!userId) {
         refs.noChatSelected.classList.remove('hidden');
@@ -958,6 +959,10 @@ function setupEvents() {
     if (refs.btnCloseChat) {
         refs.btnCloseChat.addEventListener('click', closeActiveChat);
     }
+
+    window.addEventListener('resize', () => {
+        refs.app.classList.toggle('mobile-chat-active', window.innerWidth <= 768 && !!appUI.activeChat);
+    });
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
