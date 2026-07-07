@@ -410,18 +410,47 @@
 
     <div id="folder-context-menu" class="context-menu hidden"></div>
 
+    <div id="modal-prompt" class="modal-overlay hidden">
+        <div class="modal-card prompt-card">
+            <form id="prompt-form">
+                <div class="modal-header">
+                    <div>
+                        <div class="modal-kicker" id="prompt-kicker">Shared Area</div>
+                        <h2 id="prompt-title">New Folder</h2>
+                    </div>
+                    <button type="button" class="icon-button" id="prompt-cancel" aria-label="Kapat">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <label class="field-label" id="prompt-label" for="prompt-input">Folder name</label>
+                    <input type="text" id="prompt-input" class="text-field" autocomplete="off" spellcheck="false">
+                    <div class="prompt-error hidden" id="prompt-error"></div>
+                    <button type="submit" class="primary-button block-button" id="prompt-confirm">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="modal-image-preview" class="modal-overlay image-preview-overlay hidden">
-        <button class="icon-button image-preview-close" id="btn-close-image-preview" aria-label="Kapat" title="Kapat (Esc)">
-            <svg viewBox="0 0 24 24" fill="none">
-                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-            </svg>
-        </button>
-        <a id="image-preview-download" class="icon-button image-preview-download" download title="İndir">
-            <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 3v12m0 0-4-4m4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                <path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-            </svg>
-        </a>
+        <div class="image-preview-topbar">
+            <div class="image-preview-name" id="image-preview-name"></div>
+            <div class="image-preview-actions">
+                <a id="image-preview-download" class="icon-button" download title="İndir">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3v12m0 0-4-4m4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                </a>
+                <button class="icon-button" id="btn-close-image-preview" aria-label="Kapat" title="Kapat (Esc)">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                </button>
+            </div>
+        </div>
         <img id="image-preview-img" class="image-preview-img" src="" alt="Preview">
     </div>
 

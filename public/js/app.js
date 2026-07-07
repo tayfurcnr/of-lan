@@ -74,8 +74,18 @@ const refs = {
     serverPresence: document.getElementById('server-presence'),
     modalImagePreview: document.getElementById('modal-image-preview'),
     imagePreviewImg: document.getElementById('image-preview-img'),
+    imagePreviewName: document.getElementById('image-preview-name'),
     imagePreviewDownload: document.getElementById('image-preview-download'),
-    btnCloseImagePreview: document.getElementById('btn-close-image-preview')
+    btnCloseImagePreview: document.getElementById('btn-close-image-preview'),
+    modalPrompt: document.getElementById('modal-prompt'),
+    promptForm: document.getElementById('prompt-form'),
+    promptKicker: document.getElementById('prompt-kicker'),
+    promptTitle: document.getElementById('prompt-title'),
+    promptLabel: document.getElementById('prompt-label'),
+    promptInput: document.getElementById('prompt-input'),
+    promptError: document.getElementById('prompt-error'),
+    promptConfirm: document.getElementById('prompt-confirm'),
+    promptCancel: document.getElementById('prompt-cancel')
 };
 
 let currentFolderDir = '';
@@ -348,14 +358,73 @@ function requestNotificationPermission() {
     Notification.requestPermission().catch(() => {});
 }
 
-function showDesktopNotification(senderId, message) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+function getAppToastHost() {
+    let host = document.getElementById('app-toasts');
+    if (!host) {
+        host = document.createElement('div');
+        host.id = 'app-toasts';
+        host.className = 'upload-toasts app-toasts';
+        document.body.appendChild(host);
+    }
+    return host;
+}
 
+function showAppToast({ avatarUrl, name, body, onClick }) {
+    const host = getAppToastHost();
+    const toast = document.createElement('div');
+    toast.className = 'upload-toast app-toast';
+    toast.innerHTML = `
+        ${getAvatarMarkup(name || 'User', avatarUrl, 'avatar-sm')}
+        <div class="upload-toast-body">
+            <div class="upload-toast-row">
+                <span class="upload-toast-name">${escapeHTML(name || 'User')}</span>
+            </div>
+            <div class="app-toast-text">${escapeHTML(body)}</div>
+        </div>
+        <button type="button" class="upload-toast-cancel" title="Dismiss" aria-label="Dismiss">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+    `;
+    host.appendChild(toast);
+
+    let dismissed = false;
+    const dismiss = () => {
+        if (dismissed) return;
+        dismissed = true;
+        toast.remove();
+    };
+    const timer = setTimeout(dismiss, 5000);
+
+    toast.querySelector('.upload-toast-cancel').addEventListener('click', (event) => {
+        event.stopPropagation();
+        clearTimeout(timer);
+        dismiss();
+    });
+
+    if (onClick) {
+        toast.addEventListener('click', () => {
+            clearTimeout(timer);
+            dismiss();
+            onClick();
+        });
+    }
+}
+
+function showDesktopNotification(senderId, message) {
     const sender = appUI.users.find((user) => user.id === senderId);
     const senderName = sender ? sender.displayName || sender.name : 'New message';
     const body = message.type === 'text'
         ? String(message.content || 'New message')
         : 'A new file was shared.';
+
+    showAppToast({
+        avatarUrl: sender ? sender.avatarUrl : '',
+        name: senderName,
+        body,
+        onClick: () => selectUser(senderId)
+    });
+
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
     const notification = new Notification(senderName, {
         body,
@@ -619,7 +688,7 @@ function renderMessage(message, peerUser) {
                 <div class="message-row ${side}">
                     ${getAvatarMarkup(avatarName, avatarUrl, 'avatar-sm', avatarStyle)}
                     <div class="chat-image-card">
-                        <img class="chat-image" src="${escapeHTML(message.content)}" alt="${escapeHTML(message.name || 'image')}" loading="lazy" onclick="openImagePreview('${escapeHTML(message.content)}')">
+                        <img class="chat-image" src="${escapeHTML(message.content)}" alt="${escapeHTML(message.name || 'image')}" loading="lazy" onclick="openImagePreview('${escapeHTML(message.content)}', '${escapeHTML(message.name || '')}')">
                         <div class="message-meta chat-image-meta">${meta}</div>
                     </div>
                 </div>
@@ -909,6 +978,23 @@ function renderBreadcrumb() {
     refs.folderBreadcrumb.innerHTML = html;
 }
 
+async function uploadFileToFolder(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const query = currentFolderDir ? `?dir=${encodeURIComponent(currentFolderDir)}` : '';
+    const upload = uploadFileWithProgress(`/api/folder/upload${query}`, formData, (percent) => toast.update(percent));
+    const toast = createUploadToast(file, { onCancel: () => upload.cancel() });
+
+    try {
+        await upload.promise;
+        toast.success();
+        fetchFiles();
+    } catch (error) {
+        toast.error(error.message);
+    }
+}
+
 async function fetchFiles() {
     const query = currentFolderDir ? `?dir=${encodeURIComponent(currentFolderDir)}` : '';
     try {
@@ -926,9 +1012,10 @@ window.navigateFolder = (dir) => {
     fetchFiles();
 };
 
-window.openImagePreview = (url) => {
+window.openImagePreview = (url, name) => {
     refs.imagePreviewImg.src = url;
     refs.imagePreviewDownload.href = url;
+    refs.imagePreviewName.textContent = name || url.split('/').pop();
     refs.modalImagePreview.classList.remove('hidden');
 };
 
@@ -947,36 +1034,87 @@ window.deleteSharedFile = async (filePath) => {
     }
 };
 
-async function createNewFolder() {
-    const name = prompt('Folder name:');
-    if (!name || !name.trim()) return;
+function openPromptModal({ title, label, value = '', confirmLabel = 'Save', onConfirm }) {
+    return new Promise((resolve) => {
+        refs.promptTitle.textContent = title;
+        refs.promptLabel.textContent = label;
+        refs.promptInput.value = value;
+        refs.promptConfirm.textContent = confirmLabel;
+        refs.promptError.classList.add('hidden');
+        refs.promptError.textContent = '';
+        refs.modalPrompt.classList.remove('hidden');
 
-    try {
-        await apiFetch('/api/folder/mkdir', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dir: currentFolderDir, name: name.trim() })
+        requestAnimationFrame(() => {
+            refs.promptInput.focus();
+            refs.promptInput.select();
         });
-        fetchFiles();
-    } catch (e) {
-        alert('Could not create folder: ' + e.message);
-    }
+
+        function cleanup(result) {
+            refs.modalPrompt.classList.add('hidden');
+            refs.promptForm.removeEventListener('submit', handleSubmit);
+            refs.promptCancel.removeEventListener('click', handleCancel);
+            resolve(result);
+        }
+
+        function handleCancel() {
+            cleanup(false);
+        }
+
+        async function handleSubmit(event) {
+            event.preventDefault();
+            const val = refs.promptInput.value.trim();
+            if (!val) return;
+
+            refs.promptError.classList.add('hidden');
+            refs.promptConfirm.disabled = true;
+            try {
+                await onConfirm(val);
+                cleanup(true);
+            } catch (e) {
+                refs.promptError.textContent = e.message || 'Something went wrong.';
+                refs.promptError.classList.remove('hidden');
+            } finally {
+                refs.promptConfirm.disabled = false;
+            }
+        }
+
+        refs.promptForm.addEventListener('submit', handleSubmit);
+        refs.promptCancel.addEventListener('click', handleCancel);
+    });
+}
+
+async function createNewFolder() {
+    await openPromptModal({
+        title: 'New Folder',
+        label: 'Folder name',
+        confirmLabel: 'Create',
+        onConfirm: async (name) => {
+            await apiFetch('/api/folder/mkdir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dir: currentFolderDir, name })
+            });
+            fetchFiles();
+        }
+    });
 }
 
 async function renameFolderItem(name) {
-    const newName = prompt('New name:', name);
-    if (!newName || !newName.trim() || newName.trim() === name) return;
-
-    try {
-        await apiFetch('/api/folder/rename', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dir: currentFolderDir, oldName: name, newName: newName.trim() })
-        });
-        fetchFiles();
-    } catch (e) {
-        alert('Could not rename: ' + e.message);
-    }
+    await openPromptModal({
+        title: 'Rename',
+        label: 'New name',
+        value: name,
+        confirmLabel: 'Rename',
+        onConfirm: async (newName) => {
+            if (newName === name) return;
+            await apiFetch('/api/folder/rename', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dir: currentFolderDir, oldName: name, newName })
+            });
+            fetchFiles();
+        }
+    });
 }
 
 async function deleteFolderItem(filePath) {
@@ -1166,6 +1304,32 @@ async function openAuthenticatedApp(account) {
         if (appUI.activeChat === payload.from) {
             renderChat(payload.from);
         }
+
+        const isActivelyViewing = appUI.activeChat === payload.from && !document.hidden && document.hasFocus();
+        if (!isActivelyViewing) {
+            const sender = appUI.users.find((user) => user.id === payload.from);
+            showAppToast({
+                avatarUrl: sender ? sender.avatarUrl : '',
+                name: payload.fromName || 'User',
+                body: 'sent you a nudge ⚡',
+                onClick: () => selectUser(payload.from)
+            });
+
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const notification = new Notification(payload.fromName || 'User', {
+                    body: 'sent you a nudge ⚡',
+                    icon: sender && sender.avatarUrl ? sender.avatarUrl : '/logo-white.png',
+                    badge: '/logo-white.png',
+                    tag: `nudge-${payload.from}`,
+                    renotify: true
+                });
+                notification.onclick = () => {
+                    window.focus();
+                    selectUser(payload.from);
+                    notification.close();
+                };
+            }
+        }
     });
 
     socket.on('message_delivered', (payload) => {
@@ -1276,6 +1440,92 @@ async function saveSettings() {
         socket.emit('profile_updated');
         socket.emit('request_session_state');
     }
+}
+
+async function uploadFileToChat(file) {
+    const chatId = appUI.activeChat;
+    if (!file || !chatId) return;
+
+    const tempId = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const placeholder = {
+        type: 'file',
+        tempId,
+        uploading: true,
+        percent: 0,
+        name: file.name,
+        icon: file.name.split('.').pop().toLowerCase(),
+        time: Date.now(),
+        sentByMe: true
+    };
+    getMessageSeed(chatId).push(placeholder);
+    if (appUI.activeChat === chatId) renderChat(chatId);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const updateProgress = (percent) => {
+        const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+        placeholder.percent = clamped;
+        const bubble = refs.chatMessages.querySelector(`[data-temp-id="${tempId}"]`);
+        if (bubble) {
+            const fill = bubble.querySelector('.file-upload-fill');
+            const percentLabel = bubble.querySelector('.file-upload-percent');
+            if (fill) fill.style.width = `${clamped}%`;
+            if (percentLabel) percentLabel.textContent = `${clamped}%`;
+        }
+    };
+
+    const upload = uploadFileWithProgress('/api/folder/dm-upload', formData, updateProgress);
+    activeUploads.set(tempId, () => upload.cancel());
+
+    let uploaded;
+    try {
+        uploaded = await upload.promise;
+    } catch (e) {
+        activeUploads.delete(tempId);
+        const seed = getMessageSeed(chatId);
+        const index = seed.indexOf(placeholder);
+        if (index !== -1) seed.splice(index, 1);
+        if (appUI.activeChat === chatId) renderChat(chatId);
+        return;
+    }
+
+    activeUploads.delete(tempId);
+
+    const message = {
+        type: 'file',
+        content: uploaded.url,
+        name: uploaded.name,
+        size: formatSize(uploaded.size),
+        icon: uploaded.name.split('.').pop().toLowerCase(),
+        time: Date.now(),
+        sentByMe: true
+    };
+
+    const result = await window.sendMessageToPeer(chatId, message);
+    const seed = getMessageSeed(chatId);
+    const index = seed.indexOf(placeholder);
+
+    if (!result || (!result.ok && !result.queued)) {
+        if (index !== -1) seed.splice(index, 1);
+        if (appUI.activeChat === chatId) renderChat(chatId);
+        return;
+    }
+
+    const finalMessage = {
+        ...message,
+        id: result.messageId,
+        delivered: !!result.delivered,
+        queued: !!result.queued,
+        read: !!result.delivered
+    };
+
+    if (index !== -1) {
+        seed[index] = finalMessage;
+    } else {
+        seed.push(finalMessage);
+    }
+    if (appUI.activeChat === chatId) renderChat(chatId);
 }
 
 async function logout() {
@@ -1392,6 +1642,10 @@ function setupEvents() {
         refs.app.classList.toggle('mobile-chat-active', window.innerWidth <= 768 && !!appUI.activeChat);
     });
 
+    // Prevent the browser from navigating to a dropped file if it misses a drop zone.
+    window.addEventListener('dragover', (event) => event.preventDefault());
+    window.addEventListener('drop', (event) => event.preventDefault());
+
     const refreshActiveChatReadState = () => {
         if (!appUI.activeChat || document.hidden || !document.hasFocus()) return;
         if (appUI.unreadCounts[appUI.activeChat]) {
@@ -1405,7 +1659,9 @@ function setupEvents() {
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            if (!refs.modalImagePreview.classList.contains('hidden')) {
+            if (!refs.modalPrompt.classList.contains('hidden')) {
+                refs.promptCancel.click();
+            } else if (!refs.modalImagePreview.classList.contains('hidden')) {
                 closeImagePreview();
             } else if (!refs.folderContextMenu.classList.contains('hidden')) {
                 hideFolderContextMenu();
@@ -1451,91 +1707,30 @@ function setupEvents() {
     });
     refs.fileInput.addEventListener('change', async () => {
         const file = refs.fileInput.files[0];
-        const chatId = appUI.activeChat;
-        if (!file || !chatId) { refs.fileInput.value = ''; return; }
-
-        const tempId = `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const placeholder = {
-            type: 'file',
-            tempId,
-            uploading: true,
-            percent: 0,
-            name: file.name,
-            icon: file.name.split('.').pop().toLowerCase(),
-            time: Date.now(),
-            sentByMe: true
-        };
-        getMessageSeed(chatId).push(placeholder);
-        if (appUI.activeChat === chatId) renderChat(chatId);
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const updateProgress = (percent) => {
-            const clamped = Math.max(0, Math.min(100, Math.round(percent)));
-            placeholder.percent = clamped;
-            const bubble = refs.chatMessages.querySelector(`[data-temp-id="${tempId}"]`);
-            if (bubble) {
-                const fill = bubble.querySelector('.file-upload-fill');
-                const percentLabel = bubble.querySelector('.file-upload-percent');
-                if (fill) fill.style.width = `${clamped}%`;
-                if (percentLabel) percentLabel.textContent = `${clamped}%`;
-            }
-        };
-
-        const upload = uploadFileWithProgress('/api/folder/dm-upload', formData, updateProgress);
-        activeUploads.set(tempId, () => upload.cancel());
-
-        let uploaded;
-        try {
-            uploaded = await upload.promise;
-        } catch (e) {
-            activeUploads.delete(tempId);
-            const seed = getMessageSeed(chatId);
-            const index = seed.indexOf(placeholder);
-            if (index !== -1) seed.splice(index, 1);
-            if (appUI.activeChat === chatId) renderChat(chatId);
-            refs.fileInput.value = '';
-            return;
-        }
-
-        activeUploads.delete(tempId);
+        if (file) await uploadFileToChat(file);
         refs.fileInput.value = '';
+    });
 
-        const message = {
-            type: 'file',
-            content: uploaded.url,
-            name: uploaded.name,
-            size: formatSize(uploaded.size),
-            icon: uploaded.name.split('.').pop().toLowerCase(),
-            time: Date.now(),
-            sentByMe: true
-        };
+    refs.chatContainer.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        if (!appUI.activeChat) return;
+        refs.chatContainer.classList.add('drag-over');
+    });
 
-        const result = await window.sendMessageToPeer(chatId, message);
-        const seed = getMessageSeed(chatId);
-        const index = seed.indexOf(placeholder);
-
-        if (!result || (!result.ok && !result.queued)) {
-            if (index !== -1) seed.splice(index, 1);
-            if (appUI.activeChat === chatId) renderChat(chatId);
-            return;
+    refs.chatContainer.addEventListener('dragleave', (event) => {
+        if (event.target === refs.chatContainer) {
+            refs.chatContainer.classList.remove('drag-over');
         }
+    });
 
-        const finalMessage = {
-            ...message,
-            id: result.messageId,
-            delivered: !!result.delivered,
-            queued: !!result.queued,
-            read: !!result.delivered
-        };
+    refs.chatContainer.addEventListener('drop', async (event) => {
+        event.preventDefault();
+        refs.chatContainer.classList.remove('drag-over');
 
-        if (index !== -1) {
-            seed[index] = finalMessage;
-        } else {
-            seed.push(finalMessage);
+        const files = Array.from(event.dataTransfer.files || []);
+        for (const file of files) {
+            await uploadFileToChat(file);
         }
-        if (appUI.activeChat === chatId) renderChat(chatId);
     });
 
     refs.btnSharedFolder.addEventListener('click', () => {
@@ -1619,23 +1814,28 @@ function setupEvents() {
     refs.btnFolderUpload.addEventListener('click', () => refs.folderUploadInput.click());
     refs.folderUploadInput.addEventListener('change', async () => {
         const file = refs.folderUploadInput.files[0];
-        if (!file) return;
+        if (file) await uploadFileToFolder(file);
+        refs.folderUploadInput.value = '';
+    });
 
-        const formData = new FormData();
-        formData.append('file', file);
+    refs.folderSidebar.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        refs.folderSidebar.classList.add('drag-over');
+    });
 
-        const query = currentFolderDir ? `?dir=${encodeURIComponent(currentFolderDir)}` : '';
-        const upload = uploadFileWithProgress(`/api/folder/upload${query}`, formData, (percent) => toast.update(percent));
-        const toast = createUploadToast(file, { onCancel: () => upload.cancel() });
+    refs.folderSidebar.addEventListener('dragleave', (event) => {
+        if (event.target === refs.folderSidebar) {
+            refs.folderSidebar.classList.remove('drag-over');
+        }
+    });
 
-        try {
-            await upload.promise;
-            toast.success();
-            fetchFiles();
-        } catch (error) {
-            toast.error(error.message);
-        } finally {
-            refs.folderUploadInput.value = '';
+    refs.folderSidebar.addEventListener('drop', async (event) => {
+        event.preventDefault();
+        refs.folderSidebar.classList.remove('drag-over');
+
+        const files = Array.from(event.dataTransfer.files || []);
+        for (const file of files) {
+            await uploadFileToFolder(file);
         }
     });
 
