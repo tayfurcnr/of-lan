@@ -4,6 +4,7 @@ const appUI = {
     users: [],
     activeChat: null,
     messages: {},
+    unreadCounts: {},
     myId: null,
     account: null,
     devices: []
@@ -456,14 +457,20 @@ function makeUserList(users) {
     return users.map((user) => {
         const active = appUI.activeChat === user.id ? 'active' : '';
         const dotClass = user.online ? 'online' : 'offline';
+        const unread = appUI.unreadCounts[user.id] || 0;
+        const hasUnread = unread > 0 ? 'has-unread' : '';
+        const badge = unread > 0 ? `<span class="unread-badge">${unread > 99 ? '99+' : unread}</span>` : '';
         return `
-            <li class="person-row ${active}" data-user-id="${escapeHTML(user.id)}">
+            <li class="person-row ${active} ${hasUnread}" data-user-id="${escapeHTML(user.id)}">
                 ${getAvatarMarkup(user.displayName || user.name, user.avatarUrl, 'avatar-sm')}
                 <div class="person-copy">
                     <div class="person-name">${escapeHTML(user.displayName || user.name)}</div>
                     <div class="person-meta">${escapeHTML(getUserMeta(user))}</div>
                 </div>
-                <span class="status-dot ${dotClass}"></span>
+                <div class="person-side">
+                    <span class="status-dot ${dotClass}"></span>
+                    ${badge}
+                </div>
             </li>
         `;
     }).join('');
@@ -670,6 +677,7 @@ async function loadChatHistory(userId) {
 
 function selectUser(userId) {
     appUI.activeChat = userId;
+    appUI.unreadCounts[userId] = 0;
     renderUsers();
     loadChatHistory(userId).then(() => renderChat(userId));
 }
@@ -716,6 +724,9 @@ appUI.handleIncomingMessage = (senderId, msgObj) => {
 
     if (appUI.activeChat === senderId) {
         renderChat(senderId);
+    } else {
+        appUI.unreadCounts[senderId] = (appUI.unreadCounts[senderId] || 0) + 1;
+        renderUsers();
     }
 };
 

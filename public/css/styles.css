@@ -491,6 +491,60 @@ svg {
     background: #667093;
 }
 
+.person-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 7px;
+    flex-shrink: 0;
+}
+
+.unread-badge {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #8f57f8, #6f37f0);
+    box-shadow: 0 6px 14px rgba(112, 56, 237, 0.35);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+}
+
+.person-row.has-unread .person-name {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.person-row.has-unread .person-meta {
+    color: #cdd2ea;
+}
+
+.person-row.has-unread {
+    background: linear-gradient(180deg, rgba(143, 87, 248, 0.16), rgba(111, 55, 240, 0.08));
+    border-color: rgba(159, 104, 255, 0.18);
+}
+
+.person-row.has-unread:hover {
+    background: linear-gradient(180deg, rgba(143, 87, 248, 0.22), rgba(111, 55, 240, 0.12));
+}
+
+.person-row.has-unread::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 14%;
+    bottom: 14%;
+    width: 3px;
+    border-radius: 0 4px 4px 0;
+    background: linear-gradient(180deg, #a273ff, #6f37f0);
+    box-shadow: 0 0 10px rgba(159, 104, 255, 0.5);
+}
+
 .sidebar-cta {
     flex-shrink: 0;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
