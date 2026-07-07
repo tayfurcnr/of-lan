@@ -682,6 +682,7 @@ function selectUser(userId) {
     appUI.activeChat = userId;
     appUI.unreadCounts[userId] = 0;
     renderUsers();
+    markChatRead(userId);
     loadChatHistory(userId).then(() => renderChat(userId));
 }
 
@@ -720,16 +721,23 @@ appUI.handleIncomingMessage = (senderId, msgObj) => {
     seed.push({ ...msgObj, sentByMe: false, delivered: true });
     playIncomingMessageSound();
 
-    const shouldNotify = appUI.activeChat !== senderId || document.hidden || !document.hasFocus();
-    if (shouldNotify) {
+    const isActivelyViewing = appUI.activeChat === senderId && !document.hidden && document.hasFocus();
+    if (!isActivelyViewing) {
         showDesktopNotification(senderId, msgObj);
     }
 
     if (appUI.activeChat === senderId) {
         renderChat(senderId);
+    }
+
+    if (isActivelyViewing) {
+        markChatRead(senderId);
     } else {
-        appUI.unreadCounts[senderId] = (appUI.unreadCounts[senderId] || 0) + 1;
-        renderUsers();
+        // Unread counts are server-authoritative (read_at IS NULL), so resync
+        // rather than incrementing locally — a message queued while we were
+        // offline is already reflected in the last count fetch once it lands
+        // in the DB, and incrementing here on top of that would double-count it.
+        loadUnreadCounts();
     }
 };
 
@@ -874,6 +882,20 @@ window.deleteSharedFile = async (filePath) => {
     }
 };
 
+async function loadUnreadCounts() {
+    try {
+        const payload = await apiFetch('/api/messages/unread/counts');
+        appUI.unreadCounts = payload.counts || {};
+        renderUsers();
+    } catch (error) {
+        // Keep whatever unread state we already have locally.
+    }
+}
+
+function markChatRead(userId) {
+    apiFetch(`/api/messages/${userId}/read`, { method: 'POST' }).catch(() => {});
+}
+
 async function openAuthenticatedApp(account) {
     appUI.account = account;
     appUI.myId = account.id;
@@ -881,6 +903,7 @@ async function openAuthenticatedApp(account) {
     refs.app.classList.remove('hidden');
     renderProfile();
     fetchFiles();
+    loadUnreadCounts();
 
     const socket = window.connectSocket ? window.connectSocket(getAuthToken()) : null;
     if (!socket) return;
@@ -1113,6 +1136,17 @@ function setupEvents() {
     window.addEventListener('resize', () => {
         refs.app.classList.toggle('mobile-chat-active', window.innerWidth <= 768 && !!appUI.activeChat);
     });
+
+    const refreshActiveChatReadState = () => {
+        if (!appUI.activeChat || document.hidden || !document.hasFocus()) return;
+        if (appUI.unreadCounts[appUI.activeChat]) {
+            appUI.unreadCounts[appUI.activeChat] = 0;
+            renderUsers();
+        }
+        markChatRead(appUI.activeChat);
+    };
+    window.addEventListener('focus', refreshActiveChatReadState);
+    document.addEventListener('visibilitychange', refreshActiveChatReadState);
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {

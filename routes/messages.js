@@ -1,6 +1,12 @@
 const express = require('express');
 const { authenticateToken, touchSession } = require('../lib/account-store');
-const { getConversationHistory, userExists, deleteConversation } = require('../lib/message-store');
+const {
+    getConversationHistory,
+    userExists,
+    deleteConversation,
+    markRead,
+    getUnreadCounts
+} = require('../lib/message-store');
 
 const router = express.Router();
 
@@ -39,6 +45,21 @@ function authRequired(req, res, next) {
     req.device = session.device;
     next();
 }
+
+router.get('/unread/counts', authRequired, (req, res) => {
+    res.json({ counts: getUnreadCounts(req.account.id) });
+});
+
+router.post('/:userId/read', authRequired, (req, res) => {
+    const otherUserId = String(req.params.userId || '').trim();
+    if (!otherUserId || !userExists(otherUserId)) {
+        res.status(404).json({ error: 'User not found.' });
+        return;
+    }
+
+    markRead(req.account.id, otherUserId);
+    res.json({ ok: true });
+});
 
 router.get('/:userId', authRequired, (req, res) => {
     const otherUserId = String(req.params.userId || '').trim();
