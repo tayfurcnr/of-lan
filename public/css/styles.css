@@ -2030,6 +2030,7 @@ dotlottie-wc:not(:defined) {
     border-radius: 8px;
     color: var(--text);
     font-size: 14px;
+    text-decoration: none;
     cursor: pointer;
     display: flex;
     align-items: center;

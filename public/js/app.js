@@ -1001,6 +1001,26 @@ function openFolderMenu(x, y, name, filePath) {
     refs.folderContextMenu.dataset.path = filePath;
 }
 
+function openFileMenu(x, y, name, filePath) {
+    showFolderContextMenu(x, y, `
+        <a class="context-item" href="/uploads/${encodeURIComponent(filePath)}" download data-action="download">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m0 0-4-4m4 4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Download
+        </a>
+        <button type="button" class="context-item" data-action="rename">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+            Rename
+        </button>
+        <button type="button" class="context-item text-danger" data-action="delete-file">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Delete File
+        </button>
+    `);
+
+    refs.folderContextMenu.dataset.name = name;
+    refs.folderContextMenu.dataset.path = filePath;
+}
+
 function openEmptyAreaMenu(x, y) {
     showFolderContextMenu(x, y, `
         <button type="button" class="context-item" data-action="new-folder">
@@ -1431,7 +1451,9 @@ function setupEvents() {
 
         if (row && row.dataset.isDir === 'true') {
             openFolderMenu(event.clientX, event.clientY, row.dataset.name, row.dataset.path);
-        } else if (!row) {
+        } else if (row) {
+            openFileMenu(event.clientX, event.clientY, row.dataset.name, row.dataset.path);
+        } else {
             openEmptyAreaMenu(event.clientX, event.clientY);
         }
     });
@@ -1460,6 +1482,9 @@ function setupEvents() {
                 break;
             case 'delete':
                 deleteFolderItem(path);
+                break;
+            case 'delete-file':
+                window.deleteSharedFile(path);
                 break;
             case 'new-folder':
                 createNewFolder();
